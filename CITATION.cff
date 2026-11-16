@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use ORB, please cite it as below."
+title: "ORB: a tiny, from-scratch audio engine for agents"
+abstract: >-
+  ORB turns a one-line caption into a typed Spec, compiles the Spec to a
+  deterministic DSP render at 48 kHz, and optionally refines it with a small
+  neural detail model. It ships no pretrained weights and no samples.
+authors:
+  - family-names: "Maceo"
+    given-names: "Marcos"
+version: 0.1.0
+date-released: "2026-11-16"
+license: Apache-2.0
+repository-code: "https://github.com/YOUR_ORG/orb-audio"
+keywords:
+  - audio
+  - sound-effects
+  - text-to-audio
+  - procedural-audio
+  - dsp

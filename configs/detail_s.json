@@ -1,0 +1,28 @@
+{
+  "data": "data/pairs/manifest_filtered.jsonl",
+  "out": "runs/detail_s",
+  "seed": 0,
+  "n_frames": 256,
+  "n_fft": 1024,
+  "hop": 256,
+  "batch_size": 4,
+  "epochs": 1,
+  "lr_g": 0.0001,
+  "lr_d": 0.0001,
+  "env_weight": 0.2,
+  "adv_weight": 0.1,
+  "workers": 4,
+  "log_every": 10,
+  "save_every": 2000,
+  "model": {
+    "cond_dim": 32,
+    "base": 48,
+    "levels": 4,
+    "residual_scale": 0.5
+  },
+  "disc": {
+    "in_ch": 2,
+    "base": 64,
+    "scales": 2
+  }
+}

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>ORB — text in, sound out</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="wordmark" href="/" aria-label="ORB home">ORB</a>
+    <div class="statline">15.4M params · 48 kHz · from scratch</div>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap">
+    <p class="eyebrow">caption → spec → dsp</p>
+    <h1>Text in. Sound out.</h1>
+    <p class="lede">
+      A from-scratch planner turns a one-line caption into a compact score.
+      A deterministic DSP engine renders it to stereo 48 kHz audio — no samples,
+      no pretrained weights.
+    </p>
+    <canvas id="hero-wave" class="hero-wave" aria-hidden="true"></canvas>
+  </section>
+
+  <section class="section wrap" id="examples">
+    <div class="section-head">
+      <h2 class="section-label"><span class="index">01</span>Examples</h2>
+      <div class="section-meta" id="examples-count">—</div>
+    </div>
+    <div class="grid" id="examples-grid"></div>
+  </section>
+
+  <section class="section wrap" id="playground">
+    <div class="section-head">
+      <h2 class="section-label"><span class="index">02</span>Playground</h2>
+      <div class="section-meta">live · cpu</div>
+    </div>
+
+    <div class="results" id="playground-results"></div>
+
+    <div class="panel" id="playground-panel">
+      <label class="field-label" for="caption">Caption</label>
+      <textarea id="caption" spellcheck="false" autocomplete="off" maxlength="400">4.00-second playful cue, vinyl bed, with ui pop @0.60 0.16s -12dB R1 #73</textarea>
+      <div class="chips" id="caption-chips" aria-label="Caption presets"></div>
+
+      <div class="controls">
+        <div class="control detail-control">
+          <button type="button" id="detail-toggle" class="switch" role="switch" aria-checked="false" aria-labelledby="detail-label">
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+            <span class="switch-label" id="detail-label">detail</span>
+          </button>
+          <p class="hint">Neural texture stage · slow on CPU</p>
+        </div>
+
+        <div class="control strength-control is-disabled" id="strength-control">
+          <label for="strength">strength <output id="strength-value" for="strength">1.00</output></label>
+          <input type="range" id="strength" min="0" max="1" step="0.05" value="1" disabled>
+        </div>
+
+        <button type="button" id="generate" class="btn-primary">Generate</button>
+      </div>
+
+      <div class="status" id="status" aria-live="polite">
+        <span class="spinner" id="spinner" hidden aria-hidden="true"></span>
+        <span id="status-text"></span>
+      </div>
+      <div class="error" id="error" role="alert" hidden></div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer wrap">
+  <p>Planner: 96.6% exact on held-out captions. The detail model is a subtle optional texture stage and does not meet its restoration gate.</p>
+</footer>
+
+<noscript>
+  <div class="wrap noscript">This page needs JavaScript to play and inspect the audio.</div>
+</noscript>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "files": {
+    "planner.pt": {
+      "sha256": "15c024fed31f8fc7017b3f376f8cfe907955a3bbe87fc9dcb18d0d81543a82a9",
+      "bytes": 20363043
+    },
+    "detail.pt": {
+      "sha256": "b4ef4db25f07a1b41f0978cb8f0cffd44e51e9d89a3679b79be27e36bcd28865",
+      "bytes": 41102897
+    }
+  },
+  "params": {
+    "planner": 5085184,
+    "detail": 10269187,
+    "total": 15354371
+  },
+  "planner_step": 12500
+}

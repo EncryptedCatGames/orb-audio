@@ -1,0 +1,43 @@
+{
+  "data": "data/degrade/train.jsonl",
+  "out": "runs/detail_v2",
+  "seed": 0,
+  "sample_rate": 48000,
+  "n_frames": 256,
+  "n_fft": 1024,
+  "hop": 256,
+  "crop_mode": "random",
+  "normalize_stft": true,
+  "batch_size": 8,
+  "epochs": 3000,
+  "max_steps": 20000,
+  "lr_g": 0.0002,
+  "lr_d": 0.0002,
+  "log_weight": 1.0,
+  "rel_weight": 0.0,
+  "band_weight": 1.0,
+  "band_weights": [0.05, 0.05, 0.1, 0.3, 1.0, 2.0, 4.0],
+  "gan_loss": "hinge",
+  "adv_weight": 0.0,
+  "fm_weight": 0.0,
+  "rec_weight": 0.05,
+  "env_weight": 0.2,
+  "warmup_steps": 0,
+  "ramp_steps": 1,
+  "disc_min_bin": 85,
+  "workers": 8,
+  "log_every": 20,
+  "save_every": 1000,
+  "model": {
+    "cond_dim": 32,
+    "base": 64,
+    "levels": 4,
+    "residual_scale": 8.0,
+    "noise_channels": 1,
+    "energy_gate": true
+  },
+  "disc": {
+    "base": 48,
+    "scales": 3
+  }
+}

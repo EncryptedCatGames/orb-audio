@@ -1,0 +1,26 @@
+{
+  "data": "data/degrade/overfit.jsonl",
+  "out": "runs/detail_overfit5",
+  "seed": 0,
+  "n_frames": 256,
+  "n_fft": 1024,
+  "hop": 256,
+  "crop_mode": "onset",
+  "batch_size": 4,
+  "epochs": 300,
+  "max_steps": 5000,
+  "lr_g": 0.001,
+  "lr_d": 0.0003,
+  "adv_weight": 0.0,
+  "env_weight": 0.2,
+  "workers": 0,
+  "log_every": 10,
+  "save_every": 150,
+  "model": {
+    "cond_dim": 32,
+    "base": 64,
+    "levels": 4,
+    "residual_scale": 4.0
+  },
+  "normalize_stft": true
+}

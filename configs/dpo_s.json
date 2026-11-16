@@ -1,0 +1,21 @@
+{
+  "data": "data/preferences.jsonl",
+  "sft": "runs/planner_s/last.pt",
+  "out": "runs/dpo_s",
+  "seed": 0,
+  "max_len": 1024,
+  "batch_size": 4,
+  "epochs": 1,
+  "lr": 5e-06,
+  "beta": 0.1,
+  "workers": 0,
+  "log_every": 10,
+  "save_every": 1000,
+  "model": {
+    "d": 512,
+    "layers": 12,
+    "heads": 8,
+    "ctx": 2048,
+    "dropout": 0.0
+  }
+}

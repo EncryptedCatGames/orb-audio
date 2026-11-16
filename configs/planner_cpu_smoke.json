@@ -1,0 +1,22 @@
+{
+  "data": "data/scores.jsonl",
+  "out": "runs/planner_cpu_smoke",
+  "seed": 0,
+  "max_len": 512,
+  "batch_size": 4,
+  "epochs": 1,
+  "max_steps": 200,
+  "lr": 0.0003,
+  "warmup": 20,
+  "weight_decay": 0.1,
+  "workers": 0,
+  "log_every": 20,
+  "save_every": 100,
+  "model": {
+    "d": 256,
+    "layers": 4,
+    "heads": 4,
+    "ctx": 512,
+    "dropout": 0.0
+  }
+}

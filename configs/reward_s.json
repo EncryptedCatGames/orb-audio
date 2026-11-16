@@ -1,0 +1,19 @@
+{
+  "data": "data/reward/manifest.jsonl",
+  "out": "runs/reward_s",
+  "seed": 0,
+  "n_mels": 64,
+  "batch_size": 8,
+  "epochs": 1,
+  "lr": 0.0003,
+  "warmup": 50,
+  "workers": 0,
+  "log_every": 10,
+  "save_every": 2000,
+  "model": {
+    "d": 256,
+    "text_layers": 4,
+    "text_heads": 4,
+    "ctx": 512
+  }
+}

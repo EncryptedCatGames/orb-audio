@@ -1,0 +1,28 @@
+{
+  "data": "data/degrade/train.jsonl",
+  "out": "runs/detail_harness_rel",
+  "seed": 0,
+  "n_frames": 256,
+  "n_fft": 1024,
+  "hop": 256,
+  "crop_mode": "random",
+  "normalize_stft": true,
+  "batch_size": 8,
+  "epochs": 200,
+  "max_steps": 15000,
+  "lr_g": 0.0003,
+  "lr_d": 0.0003,
+  "adv_weight": 0.0,
+  "rel_weight": 1.0,
+  "rec_weight": 0.05,
+  "env_weight": 0.2,
+  "workers": 8,
+  "log_every": 20,
+  "save_every": 2000,
+  "model": {
+    "cond_dim": 32,
+    "base": 64,
+    "levels": 4,
+    "residual_scale": 2.0
+  }
+}

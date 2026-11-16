@@ -1,0 +1,25 @@
+{
+  "data": "data/scores_100k.jsonl",
+  "val_data": "data/heldout.jsonl",
+  "out": "runs/spec_100k",
+  "seed": 0,
+  "max_len": 256,
+  "batch_size": 64,
+  "epochs": 1,
+  "max_steps": 3000,
+  "lr": 0.0003,
+  "warmup": 100,
+  "weight_decay": 0.1,
+  "workers": 8,
+  "log_every": 20,
+  "eval_every": 500,
+  "eval_batches": 50,
+  "save_every": 1000,
+  "model": {
+    "d": 256,
+    "layers": 6,
+    "heads": 4,
+    "ctx": 256,
+    "dropout": 0.1
+  }
+}
