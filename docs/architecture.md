@@ -1,204 +1,125 @@
 # Architecture
 
-Four shipped components, one training-only discriminator, one test-time loop. The constraint is parameter count, not latency.
+This describes what is in `src/orb` today, not what was planned. For the
+numbers, see [`RESULTS.md`](../RESULTS.md); for the weights, see
+[`MODEL_CARD.md`](../MODEL_CARD.md).
 
-## 1. Text encoder
+```
+caption ──► planner (5.08M) ──► Spec ──► compiler ──► DSP render ──► [detail (10.27M)] ──► audit
+```
 
-| | |
-|---|---|
-| type | decoder-only transformer, 6 layers, d=448, 7 heads |
-| vocab | 8k BPE, trained on captions + score tokens |
-| params | ~8M |
-| input | caption + constraint tokens (duration, role, tempo, key, energy) |
-| output | 448-d per token |
+The design bet is that a small model should produce a **description** of the
+sound, not the waveform. The description is typed, so it can be validated,
+edited, diffed and compiled deterministically. Almost all of the audio quality
+therefore lives in code that can be changed without retraining.
 
-Trained jointly with the planner on 40M caption tokens. No pretrained encoder. The tokenizer is trained once on the caption corpus and frozen before planner training.
+## 1. The Spec
 
-A frozen MiniLM or CLAP text tower may be used during development as a teacher. Never in the artifact.
+`orb.grammar.Spec` is the contract between the model and the renderer.
+
+```python
+Spec(duration, texture, mood, events=[SpecEvent(role, t, dur, gain_db, pan, seed)])
+```
+
+- `duration`: 2.0–30.0 s in 0.5 s steps
+- `texture`: one of 8 beds
+- `mood`: one of 10
+- `events`: 0–8, each with `t`/`dur` on a 0.01 s grid, `gain_db` on a 2 dB grid
+  from −30 to 0, `pan` on a 9-point scale, `seed` 0–255
+
+`Spec.__post_init__` rejects anything off the grid, so an invalid Spec cannot
+reach the renderer.
 
 ## 2. Planner
 
-| | |
-|---|---|
-| type | decoder-only transformer, 16 layers, d=512, 8 heads, SwiGLU, RoPE |
-| params | ~32M |
-| context | 2048 |
-| output | score tokens, grammar-masked |
-| decode | greedy for eval, temperature 0.8 / top-p 0.95 for sampling |
-
-Training:
-
-1. **SFT**: next-token cross-entropy on 10M synthetic scores, with loss masking so the model is not rewarded for copying the meta block.
-2. **DPO**: 500k preference pairs from the critic, β=0.1, one epoch.
-3. **GRPO** (optional): critic reward with a KL anchor to the SFT model, KL < 0.05.
-
-**Grammar-constrained decoding** is the most important detail. At each step, a state machine allows only tokens that keep the score valid. The model can be wrong about *which* whoosh, never about whether the JSON parses. This is what makes a 32M planner usable by an agent.
-
-## 3. DSP render
-
-No parameters. 48 kHz, deterministic, sample-accurate.
-
-### Events
-
-Ten roles now, 34 at S1:
-
-- modal resonator bank (impact, bell, pop, click)
-- time-varying bandpass noise (whoosh, riser, swell, noise sweep)
-- pitch sweeps (sub drop, riser)
-- transient click layer
-- saturation, room, stereo width
-
-Each role exposes 8–12 physical knobs. The planner emits the role and a sparse override; defaults live in code. Continuous roles are peak-aligned to the score's `apex` by measuring the rendered envelope and shifting the clip (1–2 ms residual).
-
-### Instruments
-
-Six voices, upgraded to physical modeling because latency is free:
-
-| voice | method |
-|---|---|
-| pad | detuned additive saw stack, slow attack, lowpass |
-| pluck | Karplus-Strong / additive with per-harmonic decay |
-| bass | sine + soft saw, short decay |
-| bell | FM with decaying index |
-| perc | noise transient + pitched body |
-| strings | bowed model: stick-slip excitation + resonant body |
-
-At 48 kHz with 32–64 harmonics and proper anti-aliasing. Quality comes from voicing, humanization, and mixing, not from a neural vocoder.
-
-### Textures
-
-Eight characters. The preset is a target spectral tilt, a slow LFO, and a grain density. The renderer shapes band-limited noise, adds sparse grains, mid/side width, and a seamless loop crossfade. A 4M head will later predict the 32-band trajectory from a character code; the renderer stays DSP.
-
-## 4. Detail model
-
-The timbre fix, and the highest-risk component.
-
-### Shape
-
-```
-X = STFT(DSP render, n_fft=1024, hop=256)
-c = score conditioning (role, params, section energy, instrument)
-R = U-Net(X, c)                  # complex residual, 2 channels
-audio = ISTFT(X + R)
-```
+A decoder-only transformer that copies the caption into a Spec.
 
 | | |
 |---|---|
-| type | complex-STFT U-Net, 4 down / 4 up blocks, base 64 channels |
-| params | ~20M |
-| input | 2×T×F complex STFT + conditioning vector |
-| output | 2×T×F complex residual |
-| sample rate | 48 kHz |
-| inference | 1 pass (deterministic) or 4–8 flow steps |
+| parameters | 5,085,184 |
+| layers / d / heads | 6 / 256 / 4 |
+| context | 1024 |
+| tokenizer | byte-level, vocab 352 |
 
-Why a residual instead of waveform generation:
+The vocabulary is split into byte tokens (`0..255`) and structural tokens:
 
-- **Timing is inherited.** The DSP render carries the onset, apex, and duration. The model only adds texture; it cannot move the hit.
-- **No vocoder.** ISTFT is the decoder. Phase is anchored to the DSP render.
-- **Small.** It learns a correction, not a distribution from scratch.
-- **Trainable with the losses that matter.** Multi-resolution STFT + adversarial + phase-anchor.
+| range | meaning |
+|---|---|
+| 260–272 | `SPEC END_SPEC DUR TEX MOOD EVENTS END_EVENTS EVENT T D G P S` |
+| 273–282 | decimal digits |
+| 283–298 | 16 gain levels |
+| 299–307 | 9 pan labels |
+| 308–323 | hex digits (seed) |
+| 324–331 | 8 texture values |
+| 332–341 | 10 mood values |
+| 342–351 | 10 role values |
 
-### Training
+Numbers in the caption are encoded as **decimal digits**, not bins. A bin would
+make the model learn decimal-to-bin arithmetic; digits make it a copy.
 
-Paired data: each real clip is paired with a DSP render of a fitted score.
+**Constrained decoding.** `SpecGrammar` is a state machine that masks the
+logits at every step: only structural tokens in the right order, only valid
+categorical values, only digits that keep `t + dur <= duration`, and
+`END_EVENTS` is forced at the event limit. The model can be wrong about *which*
+whoosh; it cannot produce an invalid Spec.
 
-1. Fit a score to the real clip: role, duration, onset, apex, spectral tilt, pitch. Use earshot `fit` where possible; otherwise a short parameter search.
-2. Render the score with the DSP engine.
-3. Align by onset; crop to the same length.
-4. Train the residual.
+## 3. Compiler
 
-Losses:
+`orb.grammar.score_from_spec` is a pure function from Spec to
+`orb.score.Score`. It expands the mood into four sections (intro, build, peak,
+outro), places the texture, and converts each event into a `Score` event with
+an apex time derived from the role's style table. Nothing here is learned.
 
-| loss | weight | purpose |
-|---|---|---|
-| multi-resolution STFT (3 scales) | 1.0 | spectral realism |
-| complex L1 | 0.5 | phase and transient accuracy |
-| adversarial (multi-scale discriminator, 2M) | 0.1 | recorded texture |
-| phase-anchor (onset/apex) | 0.2 | never move the hit |
-| loudness | 0.05 | no level drift |
+## 4. DSP renderers
 
-The discriminator is training-only and is not shipped.
+Pure NumPy, deterministic, seeded from the score and the event seed.
 
-**Phase caveat.** The real clip and the DSP render are aligned by onset, not by absolute phase. The complex L1 is therefore an auxiliary term; the main perceptual loss is the multi-resolution STFT on the *output*, which is phase-insensitive. The model may output a complex mask, but it is not punished for a constant phase offset. If phase prediction proves unstable, switch to a magnitude mask with the DSP phase and keep the adversarial term.
+**Events** (`render/events.py`) — 10 roles: whoosh, impact, ui_pop, riser,
+swell, click, bell, sub_drop, glitch, noise_sweep. Each is built from modal
+synthesis, filtered noise, sweeps and envelopes, then zero-meaned before the
+fade so one-sided transients do not leave DC.
 
-### Fallbacks
+**Textures** (`render/texture.py`) — white noise shaped by a spectral curve,
+a three-sine LFO, and band-passed grains. `_shape_curve` rolls off −24 dB per
+octave above 8 kHz and high-passes at 30 Hz, because `np.interp` otherwise
+leaves a flat white-noise tail to Nyquist.
 
-If the complex-STFT residual underperforms:
+**Mix** (`render/mix.py`) — the foreground (music + events) is peak-normalised
+to 0.89, and the bed is placed `gain_db` below the foreground's *active*
+loudness (95th percentile of 50 ms frame RMS). This keeps the bed's level
+independent of how sparse the events are. A single safety gain is applied to
+every stem, so the stems always sum to the mix.
 
-1. **Small vocoder**: 8M HiFi-GAN-style, conditioned on a detailed mel. Adds 8M params.
-2. **Sample-grain layer**: a 10M model that retrieves and morphs grains from a CC0 bank. Less general, very realistic.
-3. **Accept the ceiling**: ship the DSP-only "designed" sound and narrow the product to timing-critical SFX.
+## 5. Detail model
 
-The go/no-go at week 7 decides which path.
-
-## 5. Reward model and critic
-
-### Reward model
+An optional residual on top of the DSP render.
 
 | | |
 |---|---|
-| audio encoder | 4 conv blocks on 64×T mel → 4 transformer layers d=256 |
-| text encoder | shared with the planner |
-| params | ~6M |
-| heads | match (contrastive), realness (binary), sync (regression on apex error) |
+| parameters | 10,269,187 |
+| input | `(2, 513, T)` real/imag STFT + 1 noise channel |
+| architecture | complex-STFT U-Net, base 64, 4 levels, GroupNorm, SiLU, FiLM |
+| residual | above bin 43 (≈2 kHz), energy-gated, learnable noise floor |
 
-Trained with InfoNCE on 2M (caption, render) pairs plus regression on measured properties. Trained on *our renderer's* outputs, including its failure modes.
+The residual is restricted to the high band and gated by input frame energy, so
+it cannot move the onset or the low band. Inference runs 256-frame windows with
+50% overlap and a Hann crossfade, matching the training crop size.
 
-### Critic
+It is a texture stage, not a restoration model: it does not meet its own gate.
+See [`RESULTS.md`](../RESULTS.md).
 
-Measurement first, model second:
+## 6. Audit
 
-- loudness (LUFS), true peak, LRA
-- spectral balance in 1/3 octaves against the role's reference profile
-- onset, apex, tail length
-- clicks, DC, clipping, comb ring
-- sync to cue times
-- optional earshot `critique` for film-level checks
+`orb.eval.audit` is model-free and runs on every generated cue: peak ≤ 0.99,
+|DC| < 0.001, no clipping, plus informational click score, onset and spectral
+centroid. It is the only gate the shipped path must pass.
 
-Returns words: "apex 14 ms late", "tail 2.1× too short", "2.4 dB too bright".
+## What is not in v1
 
-## 6. Test-time loop
-
-Quality scales with compute, so spend it.
-
-```
-prompt
-  → sample 8 scores
-  → render + detail (batched)
-  → rank with reward model
-  → keep top 2
-  → 60 s local search over event params and mix gains (CMA-ES)
-  → 3 critique-revise rounds on the score
-  → return best
-```
-
-Budget: ≤5 minutes per 30 s cue on one GPU. On a 4-card box, batch the 8 samples across cards.
-
-Local search space: event `t`, `dur`, `apex`, gain, pan, 8–12 role params; track gain and pan; texture gain and width. 20–40 dimensions. Objective: reward model + model-free measurements + sync error.
-
-## 7. Inference path
-
-```
-caption + constraints
-  → tokenize (8k BPE)
-  → planner (grammar-masked, 8 samples)
-  → score JSON
-  → DSP render (48 kHz)
-  → detail model
-  → critic
-  → local search / revise
-  → best cue
-```
-
-Quantization: int8 ONNX for the planner and reward model; fp16 for the detail model. Target <400 MB total.
-
-## 8. What is deliberately not learned
-
-- the score grammar
-- the event synth
-- the instrument voices
-- the texture renderer
-- the measurements
-- the search loop
-
-Every one of those is deterministic code. The learned parts decide *what* to render and *how to correct the timbre*, never *when* a hit lands. That is the difference between a 66M system that works and a 300M system that almost works.
+- **Music.** The `Score` schema and `render/music.py` exist; the planner does
+  not emit tempo, key or mode, so music is off.
+- **Reward model, DPO, best-of-N critic.** Implemented in `src/orb/model` and
+  `src/orb/train` but not used by the shipped path.
+- **34 roles.** v1 ships 10 roles and 8 textures.
+- **A CC0 detail dataset.** The detail model is trained on ESC-50 and is
+  therefore non-commercial.

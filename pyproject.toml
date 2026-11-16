@@ -35,11 +35,12 @@ dev = ["pytest>=8"]
 orb-generate = "orb.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/YOUR_ORG/orb-audio"
-Repository = "https://github.com/YOUR_ORG/orb-audio"
-Issues = "https://github.com/YOUR_ORG/orb-audio/issues"
-Model = "https://huggingface.co/YOUR_HF_USER/orb-planner"
-Dataset = "https://huggingface.co/datasets/YOUR_HF_USER/orb-scores-100k"
+Homepage = "https://marcosmaceo.com"
+Repository = "https://github.com/stdevMac/orb-audio"
+Issues = "https://github.com/stdevMac/orb-audio/issues"
+Contact = "https://marcosmaceo.com"
+Model = "https://huggingface.co/marcosmaceo/orb-planner"
+Dataset = "https://huggingface.co/datasets/marcosmaceo/orb-scores-100k"
 
 [build-system]
 requires = ["hatchling"]

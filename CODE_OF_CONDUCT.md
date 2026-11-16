@@ -32,8 +32,8 @@ when representing the project in public.
 
 ## Enforcement
 
-Report problems to the maintainers at **marcosmaceowork@gmail.com**. Reports
-are handled confidentially. Maintainers may warn, remove content, or ban
+Report problems to the maintainers at **https://marcosmaceo.com**. Reports are
+handled confidentially. Maintainers may warn, remove content, or ban
 contributors, and will explain the decision where it is safe to do so.
 
 ## Attribution

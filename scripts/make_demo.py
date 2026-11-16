@@ -116,8 +116,8 @@ def high_band(x: np.ndarray, sr: int, cutoff: float = 4000.0) -> float:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--planner", default="artifacts/final/planner.pt")
-    ap.add_argument("--detail", default="artifacts/final/detail.pt")
+    ap.add_argument("--planner", default="weights/planner.pt")
+    ap.add_argument("--detail", default="weights/detail.pt")
     ap.add_argument("--out", default="out/demo")
     ap.add_argument("--strength", type=float, default=1.0)
     ap.add_argument("--sweep", default="scene_trailer")

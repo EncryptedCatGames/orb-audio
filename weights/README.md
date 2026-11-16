@@ -18,7 +18,7 @@ which is **CC BY-NC-4.0**. A model trained on that data cannot be redistributed
 under Apache-2.0, so it is published separately under the same non-commercial
 terms:
 
-- Hugging Face: `YOUR_HF_USER/orb-detail` (CC BY-NC-4.0, research only)
+- Hugging Face: `marcosmaceo/orb-detail` (CC BY-NC-4.0, research only)
 
 The DSP path is a complete cue without it. If you have the file, drop it at
 `weights/detail.pt` and the web demo and `--detail` flag will pick it up.

@@ -59,7 +59,7 @@ def spec_from_caption(tok: SpecTokenizer, planner: Planner, caption: str, device
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--planner", default="artifacts/final/planner.pt")
+    ap.add_argument("--planner", default="weights/planner.pt")
     ap.add_argument("--detail", default=None)
     ap.add_argument("--prompt", default=None)
     ap.add_argument("--score", default=None)

@@ -12,14 +12,14 @@ each step depends on the one above it.
 Author fields are already set to Marcos Maceo. Two placeholders remain:
 
 ```bash
-grep -rn "YOUR_ORG\|YOUR_HF_USER" \
+grep -rn "stdevMac\|marcosmaceo" \
   --include="*.md" --include="*.toml" --include="*.cff" --include="*.json" --include="Dockerfile" .
 ```
 
 | Placeholder | Replace with |
 |---|---|
-| `YOUR_ORG` | GitHub org or user |
-| `YOUR_HF_USER` | Hugging Face user or org |
+| `stdevMac` | GitHub org or user |
+| `marcosmaceo` | Hugging Face user or org |
 
 Also decide the PyPI distribution name. `pyproject.toml` currently uses `orb`;
 `orb-audio` is safer if `orb` is taken.
@@ -49,7 +49,7 @@ git lfs install
 git add .
 git commit -m "ORB 0.1.0: from-scratch caption-to-audio engine"
 git branch -M main
-git remote add origin https://github.com/YOUR_ORG/orb-audio.git
+git remote add origin https://github.com/stdevMac/orb-audio.git
 git push -u origin main
 git tag -a v0.1.0 -m "ORB 0.1.0" && git push origin v0.1.0
 ```
@@ -66,7 +66,7 @@ huggingface-cli login
 cd hf/model-planner
 huggingface-cli repo create orb-planner --type model
 git init && git lfs install
-git remote add origin https://huggingface.co/YOUR_HF_USER/orb-planner
+git remote add origin https://huggingface.co/marcosmaceo/orb-planner
 git add . && git commit -m "ORB planner 0.1.0"
 git push origin main
 ```
@@ -79,7 +79,7 @@ Check the card renders and the license badge reads Apache-2.0.
 cd hf/dataset-scores
 huggingface-cli repo create orb-scores-100k --type dataset
 git init && git lfs install
-git remote add origin https://huggingface.co/datasets/YOUR_HF_USER/orb-scores-100k
+git remote add origin https://huggingface.co/datasets/marcosmaceo/orb-scores-100k
 git add . && git commit -m "ORB scores 100k"
 git push origin main
 ```
@@ -90,7 +90,7 @@ git push origin main
 cd hf/model-detail
 huggingface-cli repo create orb-detail --type model
 git init && git lfs install
-git remote add origin https://huggingface.co/YOUR_HF_USER/orb-detail
+git remote add origin https://huggingface.co/marcosmaceo/orb-detail
 git add . && git commit -m "ORB detail 0.1.0 (CC BY-NC-4.0)"
 git push origin main
 ```
@@ -103,7 +103,7 @@ The card must keep the non-commercial warning at the top.
 cd hf/space
 huggingface-cli repo create orb --type space --space_sdk docker
 git init && git lfs install
-git remote add origin https://huggingface.co/spaces/YOUR_HF_USER/orb
+git remote add origin https://huggingface.co/spaces/marcosmaceo/orb
 git add . && git commit -m "ORB demo"
 git push origin main
 ```
@@ -114,7 +114,7 @@ from the Hub, so steps 2 and 3 must be done first. Build takes a few minutes.
 ## 7. After publishing
 
 - [ ] README links resolve (GitHub, HF model, HF dataset, Space)
-- [ ] `pip install "orb[train] @ git+https://github.com/YOUR_ORG/orb-audio"` works in a clean venv
+- [ ] `pip install "orb[train] @ git+https://github.com/stdevMac/orb-audio"` works in a clean venv
 - [ ] The Space loads and generates a cue
 - [ ] The detail model card shows CC BY-NC-4.0
 - [ ] `CITATION.cff` validates (`cffconvert --validate`)

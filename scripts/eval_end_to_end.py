@@ -45,8 +45,8 @@ def _onset(x: np.ndarray, sr: int, threshold: float = 0.02) -> float:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--planner", default="artifacts/final/planner.pt")
-    ap.add_argument("--detail", default="artifacts/final/detail.pt")
+    ap.add_argument("--planner", default="weights/planner.pt")
+    ap.add_argument("--detail", default="weights/detail.pt")
     ap.add_argument("--data", default="data/heldout.jsonl")
     ap.add_argument("--n", type=int, default=20)
     ap.add_argument("--detail-strength", type=float, default=1.0)

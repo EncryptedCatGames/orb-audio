@@ -1,5 +1,10 @@
 # Evaluation
 
+> **Note:** this is a planning document. Gates G1–G3 are the ones the shipped
+> v1 is measured against; G4–G6 (reward model, DPO, critic) describe stages
+> that are implemented but not used by the shipped path. See
+> [RESULTS.md](../RESULTS.md) for the actual numbers.
+
 Every gate is a number and a command. No gate is "it sounds good". Latency is not a gate; a 5-minute render is acceptable.
 
 ## Baselines

@@ -29,7 +29,7 @@ and variations that make up most of a project's audio.
 ## Quickstart
 
 ```bash
-git clone https://github.com/YOUR_ORG/orb-audio
+git clone https://github.com/stdevMac/orb-audio
 cd orb-audio
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
@@ -162,6 +162,12 @@ weights/            planner weights (Apache-2.0)
 hf/                 ready-to-publish Hugging Face model, dataset and Space
 ```
 
+Further reading: [`docs/architecture.md`](docs/architecture.md) (how it works),
+[`docs/score.md`](docs/score.md) (the Score schema),
+[`docs/training.md`](docs/training.md) (GPU runbook),
+[`docs/eval.md`](docs/eval.md) (gates), [`PLAN.md`](PLAN.md) (original plan),
+[`REVIEW.md`](REVIEW.md) (pre-build red-team).
+
 ## Training
 
 The planner trains from scratch on procedurally generated data in minutes on one GPU:
@@ -182,7 +188,7 @@ See [`docs/training.md`](docs/training.md) for the GPU runbook and
   title  = {ORB: a tiny, from-scratch audio engine for agents},
   author = {Marcos Maceo},
   year   = {2026},
-  url    = {https://github.com/YOUR_ORG/orb-audio},
+  url    = {https://github.com/stdevMac/orb-audio},
   note   = {Version 0.1.0}
 }
 ```

@@ -4,14 +4,14 @@ Everything below runs on one 24 GB GPU. The current box is a **Runpod RTX 4090 S
 
 ## 1. Box
 
-The planner is 4M and the detail harness is 10M, so a 24 GB card is comfortable. Do not rent the 96 GB Blackwell unless you are running the teacher model or parallel sweeps.
+The shipped planner is 5.08M and the detail model is 10.27M, so a 24 GB card is comfortable. Everything here was trained on a single RTX 4090.
 
 | stage | VRAM at batch 4–8 | fits 20 GB |
 |---|---|---|
-| planner 41M, seq 1024 | 10–14 GB | yes |
-| detail 23M, 2×513×256 | 8–12 GB | yes |
-| reward 5M | <4 GB | yes |
-| DPO 41M | 12–16 GB | yes |
+| planner 5.08M, seq 1024 | 4–8 GB | yes |
+| detail 10.27M, 2×513×256 | 8–12 GB | yes |
+| reward 5M (not used in v1) | <4 GB | yes |
+| DPO 41M (not used in v1) | 12–16 GB | yes |
 
 If you hit OOM: halve the batch, or add gradient accumulation. The scripts do not accumulate yet.
 

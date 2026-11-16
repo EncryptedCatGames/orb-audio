@@ -1,5 +1,10 @@
 # Data engine
 
+> **Note:** this is a planning document. The shipped v1 trains the planner on
+> synthetic caption/Spec pairs only; the pair builder, reward manifest and
+> preference loops described below are implemented but not used by the shipped
+> path. See [RESULTS.md](../RESULTS.md).
+
 The model is small, so the data has to be precise. Four loops, in order of importance.
 
 ## 1. Synthetic pretraining
