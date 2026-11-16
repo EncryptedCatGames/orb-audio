@@ -3,6 +3,10 @@
 Everything is prepared locally. **Nothing has been pushed.** Work top to bottom;
 each step depends on the one above it.
 
+> `hf/` is gitignored in the main repo: it is a staging area where each
+> subfolder becomes its own repository. Do not `git clean -fdx` before pushing
+> it, and do not `git add hf/` from the main repo.
+
 ## 0. Fill in the placeholders
 
 Author fields are already set to Marcos Maceo. Two placeholders remain:
