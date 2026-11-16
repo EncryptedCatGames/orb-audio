@@ -13,6 +13,8 @@ caption ──► planner (5.1M) ──► Spec ──► DSP render ──► [
 - every output is an editable `Spec`, not a blob
 - Apache-2.0
 
+![The ORB web demo: a caption in, a waveform and an editable Spec out](docs/demo.png)
+
 ## The idea
 
 A sample is a **file**. This is a **function**.
