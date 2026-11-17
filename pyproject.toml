@@ -56,7 +56,7 @@ Repository = "https://github.com/stdevMac/orb-audio"
 Issues = "https://github.com/stdevMac/orb-audio/issues"
 Changelog = "https://github.com/stdevMac/orb-audio/blob/main/CHANGELOG.md"
 Model = "https://huggingface.co/marcosmaceo/orb-planner"
-Dataset = "https://huggingface.co/datasets/marcosmaceo/orb-scores-100k"
+Dataset = "https://huggingface.co/datasets/marcosmaceo/orb-planner-data"
 Demo = "https://huggingface.co/spaces/marcosmaceo/orb"
 Author = "https://marcosmaceo.com"
 

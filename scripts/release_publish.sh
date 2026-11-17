@@ -22,7 +22,7 @@
 # Environment overrides:
 #   GH_REPO   (stdevMac/orb-audio)      HF_USER (marcosmaceo)
 #   HF_PLANNER_REPO (orb-planner)  HF_DETAIL_REPO (orb-detail)
-#   HF_DATASET_REPO (orb-scores-100k)  HF_SPACE_REPO (orb)
+#   HF_DATASET_REPO (orb-planner-data)  HF_SPACE_REPO (orb)
 #   PY        python with huggingface_hub installed (default: .venv-torch/bin/python, then python3)
 #
 # Order matters: the Space Dockerfile clones the GitHub tag and downloads the
@@ -51,7 +51,7 @@ GH_REPO="${GH_REPO:-stdevMac/orb-audio}"
 HF_USER="${HF_USER:-marcosmaceo}"
 HF_PLANNER="$HF_USER/${HF_PLANNER_REPO:-orb-planner}"
 HF_DETAIL="$HF_USER/${HF_DETAIL_REPO:-orb-detail}"
-HF_DATASET="$HF_USER/${HF_DATASET_REPO:-orb-scores-100k}"
+HF_DATASET="$HF_USER/${HF_DATASET_REPO:-orb-planner-data}"
 HF_SPACE="$HF_USER/${HF_SPACE_REPO:-orb}"
 GH_OWNER="${GH_REPO%%/*}"; GH_NAME="${GH_REPO##*/}"
 PAGES_URL="https://$(echo "$GH_OWNER" | tr '[:upper:]' '[:lower:]').github.io/$GH_NAME/"
@@ -266,7 +266,7 @@ if want hf-planner; then
 fi
 if want hf-dataset; then
   say "5. HF dataset: $HF_DATASET (Apache-2.0)"
-  hf_upload "$HF_DATASET" dataset hf/dataset-scores "ORB scores 100k ($VERSION)"
+  hf_upload "$HF_DATASET" dataset hf/dataset-scores "ORB planner data ($VERSION)"
   echo
 fi
 if want hf-detail; then

@@ -13,7 +13,7 @@ Caption in, 48 kHz stereo out: exact to the frame, editable as JSON, no samples,
 <br>
 [![HF model](https://img.shields.io/badge/%F0%9F%A4%97%20model-orb--planner-ffcc4d)](https://huggingface.co/marcosmaceo/orb-planner)
 [![HF Space](https://img.shields.io/badge/%F0%9F%A4%97%20space-try%20it%20live-ff9d00)](https://huggingface.co/spaces/marcosmaceo/orb)
-[![HF dataset](https://img.shields.io/badge/%F0%9F%A4%97%20dataset-orb--scores--100k-ffcc4d)](https://huggingface.co/datasets/marcosmaceo/orb-scores-100k)
+[![HF dataset](https://img.shields.io/badge/%F0%9F%A4%97%20dataset-orb--planner--data-ffcc4d)](https://huggingface.co/datasets/marcosmaceo/orb-planner-data)
 
 **[Watch the demo](https://stdevmac.github.io/orb-audio/)** ·
 **[Try it live](https://huggingface.co/spaces/marcosmaceo/orb)** ·
@@ -241,7 +241,7 @@ The grammar is regular, so a perfect held-out score means the parser is solved i
 |---|---|---|
 | Code, DSP engine, MCP server | [github.com/stdevMac/orb-audio](https://github.com/stdevMac/orb-audio) | Apache-2.0 |
 | Planner weights (5.1M) | [`weights/planner.pt`](weights/) (Git LFS) · `planner.safetensors` + `config.json` on the [GitHub release](https://github.com/stdevMac/orb-audio/releases) and [HF: marcosmaceo/orb-planner](https://huggingface.co/marcosmaceo/orb-planner) | Apache-2.0 |
-| 100k caption/Spec pairs | [HF: marcosmaceo/orb-scores-100k](https://huggingface.co/datasets/marcosmaceo/orb-scores-100k) | Apache-2.0 |
+| Planner training data (300k rows) + held-out sets | [HF: marcosmaceo/orb-planner-data](https://huggingface.co/datasets/marcosmaceo/orb-planner-data) | Apache-2.0 |
 | Live demo | [HF Space: marcosmaceo/orb](https://huggingface.co/spaces/marcosmaceo/orb) | Apache-2.0 |
 | Project page + demo video | [stdevmac.github.io/orb-audio](https://stdevmac.github.io/orb-audio/) · `orb-demo.mp4` on the GitHub release | Apache-2.0, except third-party media in the film (see [NOTICE](NOTICE)) |
 | Detail model (9.1M) | [HF: marcosmaceo/orb-detail](https://huggingface.co/marcosmaceo/orb-detail) | **CC BY-NC-4.0**, research only |

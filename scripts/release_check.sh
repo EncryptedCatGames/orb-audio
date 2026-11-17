@@ -108,7 +108,7 @@ if [[ "$(git check-attr filter -- weights/planner.pt | awk '{print $NF}')" == "l
 else
   bad "weights/planner.pt is not LFS-tracked"
 fi
-if git lfs ls-files -n 2>/dev/null | grep -qx 'weights/planner.pt'; then ok "weights/planner.pt is stored as an LFS object"; else bad "weights/planner.pt is not in 'git lfs ls-files'"; fi
+if grep -qx 'weights/planner.pt' <<<"$(git lfs ls-files -n 2>/dev/null)"; then ok "weights/planner.pt is stored as an LFS object"; else bad "weights/planner.pt is not in 'git lfs ls-files'"; fi
 
 if [[ -z "$(git ls-files hf)" ]]; then ok "hf/ staging area is not tracked by git"; else bad "files under hf/ are tracked in the main repo"; fi
 for f in weights/detail.pt weights/detail.safetensors; do
@@ -210,18 +210,21 @@ else
   warn "hf/model-detail/detail.safetensors not present; detail repo will not be publishable"
 fi
 
-if [[ -f hf/dataset-scores/data/scores_100k.jsonl.gz ]]; then
-  check "hf/dataset-scores: 100,000 valid JSON rows with caption + score" "$PY" - <<'EOF'
+if [[ -f hf/dataset-scores/data/grammar/train.jsonl.gz && -f hf/dataset-scores/data/freetext/train.jsonl.gz ]]; then
+  check "hf/dataset-scores: grammar + freetext splits are valid JSON with the expected keys and counts" "$PY" - <<'EOF'
 import gzip, json
-n = 0
-with gzip.open("hf/dataset-scores/data/scores_100k.jsonl.gz", "rt") as f:
-    for line in f:
-        row = json.loads(line); n += 1
-        assert "caption" in row and "score" in row, f"row {n} missing keys"
-assert n == 100_000, f"{n} rows"
+want = {"grammar/train": (150_000, "score"), "grammar/test": (500, "score"),
+        "freetext/train": (150_000, "spec"), "freetext/validation": (500, "spec")}
+for name, (count, key) in want.items():
+    n = 0
+    with gzip.open(f"hf/dataset-scores/data/{name}.jsonl.gz", "rt") as f:
+        for line in f:
+            row = json.loads(line); n += 1
+            assert set(row) == {"caption", key}, f"{name} row {n}: {sorted(row)}"
+    assert n == count, f"{name}: {n} rows"
 EOF
 else
-  bad "hf/dataset-scores/data/scores_100k.jsonl.gz missing"
+  bad "hf/dataset-scores/data/{grammar,freetext}/*.jsonl.gz missing"
 fi
 
 # ---------------------------------------------------------------------------

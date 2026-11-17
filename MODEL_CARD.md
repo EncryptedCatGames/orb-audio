@@ -3,9 +3,8 @@
 Published on the Hugging Face Hub as
 [marcosmaceo/orb-planner](https://huggingface.co/marcosmaceo/orb-planner)
 (Apache-2.0) and [marcosmaceo/orb-detail](https://huggingface.co/marcosmaceo/orb-detail)
-(CC BY-NC-4.0). An earlier planner (v5) was trained on
-[marcosmaceo/orb-scores-100k](https://huggingface.co/datasets/marcosmaceo/orb-scores-100k);
-the released v8 was trained on regenerated synthetic data (see Planner below).
+(CC BY-NC-4.0). The planner's training data (300k synthetic rows) and held-out
+sets are [marcosmaceo/orb-planner-data](https://huggingface.co/datasets/marcosmaceo/orb-planner-data).
 
 ## Artifacts
 

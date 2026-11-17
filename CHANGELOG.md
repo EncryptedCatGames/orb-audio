@@ -89,7 +89,7 @@ First public release.
   a Hugging Face Space (`hf/space/`) that runs the planner + DSP path on CPU.
 - GitHub Pages project page (`site/`) with a demo video.
 - Planner weights as safetensors on the Hugging Face Hub and as GitHub release
-  assets (with the demo video), plus the 100k caption/Spec training set as a Hub
+  assets (with the demo video), plus the v8 planner training data (300k rows) as a Hub
   dataset.
 - Training, evaluation, and packaging scripts.
 - Release tooling: `scripts/release_check.sh` (local preflight) and

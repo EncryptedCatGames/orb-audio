@@ -13,7 +13,7 @@ caption ──► planner (5.1M) ──► Spec (JSON) ──► DSP render ─�
 **[Watch the demo](https://stdevmac.github.io/orb-audio/)** ·
 **[Try it live](https://huggingface.co/spaces/marcosmaceo/orb)** ·
 **[Planner on the Hub](https://huggingface.co/marcosmaceo/orb-planner)** ·
-**[Dataset](https://huggingface.co/datasets/marcosmaceo/orb-scores-100k)**
+**[Dataset](https://huggingface.co/datasets/marcosmaceo/orb-planner-data)**
 
 ## Why it is different
 
@@ -44,8 +44,8 @@ that document. That gives you:
 - **`orb-generate`**: caption to WAV from the shell.
 - **A Hugging Face Space** that runs the planner + DSP path on a free CPU.
 - **A project page** on GitHub Pages with a demo video of ORB cues cut to motion design.
-- **A training set**: 100k procedurally generated caption/Spec pairs (the earlier v5 set; v8's
-  data is regenerated with `scripts/gen_scores.py` and `scripts/gen_freetext.py`), Apache-2.0.
+- **The training set**: the exact 300k rows v8 was trained on (150k grammar pairs, 150k
+  plain-text pairs) plus the held-out sets, Apache-2.0.
 
 ## Install
 
@@ -87,7 +87,7 @@ planner). `"bed_db"` sets the bed level relative to the events (default −40 dB
 |---|---|---|
 | Code, DSP engine, MCP server | this repository | Apache-2.0 |
 | Planner weights | `planner.pt` in the repo (Git LFS); `planner.safetensors` + `config.json` as release assets and on the [Hub](https://huggingface.co/marcosmaceo/orb-planner) | Apache-2.0 |
-| 100k caption/Spec pairs | [Hub dataset](https://huggingface.co/datasets/marcosmaceo/orb-scores-100k) | Apache-2.0 |
+| Planner training data (300k rows) | [Hub dataset](https://huggingface.co/datasets/marcosmaceo/orb-planner-data) | Apache-2.0 |
 | Demo video (`orb-demo.mp4`) | release asset, [project page](https://stdevmac.github.io/orb-audio/) | Apache-2.0, except the third-party photos and generated images credited in [NOTICE](https://github.com/stdevMac/orb-audio/blob/main/NOTICE) |
 | Detail model (9.06M) | [Hub](https://huggingface.co/marcosmaceo/orb-detail) only | **CC BY-NC-4.0**, research only |
 

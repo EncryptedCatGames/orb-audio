@@ -78,7 +78,7 @@ What `--yes` does, in order. Each step can be re-run alone with `--only <step>`:
 | `pages` | `gh api -X POST repos/stdevMac/orb-audio/pages -f build_type=workflow`, then trigger `pages.yml` |
 | `release` | tag `v0.1.0`, push it, then `gh release create` with the CHANGELOG section as notes; attaches `planner.safetensors`, its config and the demo MP4 |
 | `hf-planner` | create and upload `marcosmaceo/orb-planner` (Apache-2.0) |
-| `hf-dataset` | create and upload `datasets/marcosmaceo/orb-scores-100k` (Apache-2.0) |
+| `hf-dataset` | create and upload `datasets/marcosmaceo/orb-planner-data` (Apache-2.0) |
 | `hf-detail` | create and upload `marcosmaceo/orb-detail` (**CC BY-NC-4.0**; skip it with `--skip-detail`) |
 | `hf-space` | create and upload `spaces/marcosmaceo/orb` (Docker). It refuses to run until the GitHub tag exists |
 
@@ -101,7 +101,7 @@ handles this). The first build takes about 5 minutes.
 - [ ] The Space builds, loads and generates a cue
 - [ ] The HF planner card shows Apache-2.0, `text-to-audio`, the dataset link and the eval result
 - [ ] The detail model card shows CC BY-NC-4.0 and opens with the non-commercial warning
-- [ ] The dataset viewer renders `scores_100k.jsonl.gz`
+- [ ] The dataset viewer renders both configs (`grammar`, `freetext`)
 - [ ] `CITATION.cff` validates (`pipx run cffconvert --validate`); GitHub shows "Cite this repository"
 - [ ] Turn on branch protection for `main` (require the `tests` checks)
 - [ ] Post the announcement (the short form is at the end of `docs/release-notes-v0.1.0.md`)
