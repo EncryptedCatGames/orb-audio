@@ -469,44 +469,122 @@ def _wave_crash(ev, sr, rng, crng, p, seed):
     return (chan() + th) * fo, (chan() + th) * fo
 
 
+def _air_fastlen(m: int) -> int:
+    """The smallest 2^a 3^b 5^c >= m (an FFT length without a large prime)."""
+    best = 1 << (m - 1).bit_length()
+    p5 = 1
+    while p5 < best:
+        p35 = p5
+        while p35 < best:
+            k = p35 << max(0, (-(-m // p35) - 1).bit_length())
+            best = min(best, k)
+            p35 *= 3
+        p5 *= 5
+    return best
+
+
+def _air_band(x, sr, *bands, split=False, pad=2048):
+    """`dsp.bandlimit` for one or more (lo, hi, order, gain) bands at once,
+    summed, on the last axis of `x` (so a (2, n) stereo pair filters in one
+    pass), with an FFT length free of large primes. Same zero-phase
+    Butterworth magnitudes and padding as `bandlimit`. `split=True` returns
+    each band on its own (one forward FFT for all of them)."""
+    x = np.asarray(x, dtype=np.float64)
+    n = x.shape[-1]
+    m = _air_fastlen(n + 2 * pad)
+    xp = np.zeros(x.shape[:-1] + (m,))
+    xp[..., pad : pad + n] = x
+    X = np.fft.rfft(xp, axis=-1)
+    f = np.fft.rfftfreq(m, 1.0 / sr)
+    mags = []
+    for lo, hi, order, gain in bands:
+        b = np.full_like(f, gain)
+        if hi is not None:
+            b /= np.sqrt(1.0 + (f / max(hi, 1.0)) ** (2 * order))
+        if lo is not None:
+            b /= np.sqrt(1.0 + (np.maximum(f, 1e-9) / max(lo, 1.0)) ** (-2 * order))
+        mags.append(b)
+    if split:
+        return [np.fft.irfft(X * b, m, axis=-1)[..., pad : pad + n] for b in mags]
+    return np.fft.irfft(X * np.sum(mags, axis=0), m, axis=-1)[..., pad : pad + n]
+
+
+def _air_narrow(rng, n, sr, f, bw):
+    """Narrow-band noise of about `bw` Hz around the frequency curve `f` (Hz):
+    complex noise low-passed to bw/2 and turned up to f. A resonance driven
+    by turbulence (a howl over an edge, a firework whistle), not a pure tone."""
+    z = _air_band(rng.standard_normal((2, n)), sr, (None, 0.5 * bw, 2, 1.0))
+    z = z[0] + 1j * z[1]
+    z = z / (np.sqrt(np.mean(np.abs(z) ** 2)) + 1e-12)
+    return np.real(z * np.exp(1j * TAU * np.cumsum(f) / sr))
+
+
+def _air_doppler(x, sr, dist, c=343.0):
+    """`x` as heard from `dist(t)` metres away: the travel time dist/c is a
+    moving delay (the Doppler shift falls out of it), relative to the closest
+    point so nothing is pushed out of the clip."""
+    n = len(x)
+    i = np.arange(n, dtype=np.float64)
+    d = (dist - dist.min()) / c * sr
+    return np.interp(i - d, i, x, left=0.0)
+
+
+def _air_absorb(x, sr, near, f_dark=2500.0):
+    """Air absorption: the far source keeps its lows and loses its highs;
+    `near(t)` in [0, 1] is how much of the top survives."""
+    dark = _air_band(x, sr, (None, f_dark, 2, 1.0))
+    return dark + np.clip(near, 0.0, 1.0) * (x - dark)
+
+
 def _wind_gust(ev, sr, rng, crng, p, seed):
-    """A gust: low turbulent buffeting that swells and dies away, with a
-    moving resonance (howl) or a leafy rustle on top."""
+    """Wind is turbulence, not a tone: a breeze that never quite stops, one
+    gust swelling over it, and eddies at every time scale (slow surges, quick
+    buffets). The faster the air, the louder, and the brighter through the
+    edge hiss: rumble ~ u^1.5, rushing band ~ u^1.3, hiss ~ u^2.5. The
+    howling gust adds narrow resonances over edges whose pitch follows the
+    speed (Strouhal), and only above a threshold; the leafy gust adds the rustle of leaves, many
+    tiny random contacts whose rate climbs steeply with the speed."""
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
     kind = seed % 3
-    peak = crng.uniform(0.3, 0.55) * dur
-    env = np.where(t < peak, np.sin(0.5 * np.pi * t / peak) ** 2,
-                   np.cos(0.5 * np.pi * np.clip((t - peak) / (dur - peak), 0, 1)) ** 1.5)
-    flutter = 0.6 + 0.4 * _smooth(crng, n, sr, 5.0)
-    env = env * flutter
+    peak = crng.uniform(0.3, 0.7) * dur
+    gust = np.where(t < peak, np.sin(0.5 * np.pi * t / peak) ** 2,
+                    np.cos(0.5 * np.pi * np.clip((t - peak) / max(dur - peak, 1e-3), 0, 1)) ** 2)
+    base = crng.uniform(0.55, 0.7)  # the wind that is always there
+    eddies = 0.5 * _smooth(crng, n, sr, 0.9) + 0.3 * _smooth(crng, n, sr, 2.5) + 0.2 * _smooth(crng, n, sr, 7.0) - 0.5
+    u = np.clip(base + (1.0 - base) * gust + 0.6 * eddies, 0.05, None)
+    u = u / u.max()
+    shape = _attack(n, sr, 0.0, min(0.15, 0.05 * dur)) * _fade_out(n, sr, min(0.3, 0.1 * dur))
+    if kind == 0:  # pressure slaps: eddies the size of the listener's head hitting it
+        buffet = 0.3 + 2.0 * _smooth(crng, n, sr, 5.0) ** 4
+    else:
+        buffet = 0.7 + 0.3 * _smooth(crng, n, sr, 3.0)
+    f0 = crng.uniform(380.0, 620.0)
+    ratio = crng.uniform(1.35, 1.6)
+    whistle = np.clip((u - 0.4) / 0.6, 0.0, 1.0) ** 1.5 * (0.6 + 0.4 * _smooth(crng, n, sr, 1.5))
 
-    def chan():
-        low = _wash(rng, n, sr, 25.0, 220.0) * (0.7 + 0.3 * _smooth(crng, n, sr, 9.0))
-        mid = _wash(rng, n, sr, 150.0, 1200.0)
-        out = low + (0.15 if kind == 0 else 0.35) * mid
-        if kind == 1:
-            # howl: noise through a narrow band whose centre follows the gust
-            fc = 380.0 + 420.0 * env / max(env.max(), 1e-9)
-            noise = rng.standard_normal(n)
-            howl = np.zeros(n)
-            # time-varying resonance by short-block band-passing
-            blk = int(0.05 * sr)
-            for s in range(0, n, blk):
-                e = min(n, s + blk + blk)
-                c = float(np.mean(fc[s : min(n, s + blk)]))
-                seg = bandlimit(noise[s:e], sr, c * 0.93, c * 1.07, order=2)
-                w = np.hanning(e - s)
-                howl[s:e] += seg * w
-            out = out + 0.9 * _norm(howl)
-        elif kind == 2:
-            leaves = _wash(rng, n, sr, 1500.0, 7000.0, order=4) * (0.4 + 0.6 * _smooth(crng, n, sr, 14.0))
-            out = 0.7 * out + 0.5 * leaves
-        return out * env
-
-    fo = _fade_out(n, sr, 0.1)
-    return chan() * fo, chan() * fo
+    rumble, rush, hiss = (y / np.abs(y).max(axis=-1, keepdims=True) for y in _air_band(
+        rng.standard_normal((2, n)), sr, (20.0, 220.0, 2, 1.0), (150.0, 1200.0, 2, 1.0), (900.0, 3000.0, 2, 1.0), split=True))
+    rumble = rumble * u**1.5 * buffet
+    rush = rush * u**1.3  # the broadband rush is steadier than the rumble
+    hiss = hiss * u**2.5
+    if kind == 0:
+        out = 1.0 * rumble + 0.3 * rush + 0.04 * hiss
+    elif kind == 1:
+        f = f0 * (0.55 + 0.6 * u)
+        howl = _air_narrow(rng, n, sr, f, 16.0) + 0.45 * _air_narrow(rng, n, sr, f * ratio, 24.0)
+        out = 0.8 * rumble + 0.45 * rush + 0.07 * hiss + 0.3 * _norm(howl) * whistle
+    else:
+        lam = 2500.0 * u**3  # leaf contacts per second
+        hits = rng.random((2, n)) < lam / sr
+        g = np.zeros((2, n))
+        g[hits] = rng.lognormal(0.0, 0.6, int(hits.sum())) * rng.choice((-1.0, 1.0), int(hits.sum()))
+        ticks, sheet = _air_band(np.stack([g, rng.standard_normal((2, n))]), sr, (1200.0, 7000.0, 2, 1.0), (1500.0, 6000.0, 2, 1.0), split=True)
+        ticks = ticks[0] / np.abs(ticks[0]).max()
+        sheet = sheet[1] / np.abs(sheet[1]).max() * u**3 * (0.5 + 0.5 * _smooth(crng, n, sr, 18.0))
+        out = 0.8 * (0.8 * rumble + 0.45 * rush + 0.07 * hiss) + 0.3 * ticks + 0.15 * sheet
+    return out[0] * shape, out[1] * shape
 
 
 def _splash(ev, sr, rng, crng, p, seed):
@@ -1400,40 +1478,58 @@ def _heartbeat(ev, sr, rng, crng, p, seed):
 
 
 def _applause(ev, sr, rng, crng, p, seed):
-    """Applause: N people clapping at their own rate (3-5 Hz), each clap a
-    short burst whose colour depends on the hand shape; the crowd swells in
-    and dies away."""
+    """Applause is many independent hand claps. Each clap is a ~1 ms puff of
+    air squeezed from between the palms that rings the cavity between the
+    hands (0.7-2.8 kHz: low for cupped hands, high for flat palms) for a few
+    ms. Each person keeps their own hand shape and claps steadily at 2.5-5.5
+    Hz (a few % jitter); the crowd starts within a fraction of a second and
+    trails off person by person; now and then a hand lands differently. A few people stay distinct; a big audience
+    becomes a dense, flat roar of clicks in a hall."""
     n = _n(ev, sr)
     dur = n / sr
-    people = (int(crng.integers(4, 8)), int(crng.integers(25, 40)), int(crng.integers(120, 160)))[seed % 3]
-    start = min(0.6, 0.15 * dur)
-    stop = max(start + 0.2, dur - min(1.5, 0.35 * dur))
-    left = np.zeros(n)
-    right = np.zeros(n)
-    bands = ((700, 2400), (900, 3200), (1200, 4200), (500, 1800))
-    clap_bank = []
-    for b in bands:
-        for _ in range(2):
-            k = int(0.03 * sr)
-            e = np.exp(-np.arange(k) / sr / crng.uniform(0.004, 0.009))
-            e[: int(0.0008 * sr)] *= np.linspace(0, 1, int(0.0008 * sr))
-            clap_bank.append(bandlimit(rng.standard_normal(k) * e, sr, b[0], b[1], order=2))
-    for _ in range(people):
-        rate = crng.uniform(3.0, 5.5)
-        tm = crng.uniform(0.0, start + 0.4)
-        stop_i = stop + crng.uniform(-0.5, 0.4)
-        clap = clap_bank[int(crng.integers(len(clap_bank)))]
-        level = crng.lognormal(0.0, 0.4) / np.sqrt(people)
-        w = crng.uniform(0.0, 1.0)
-        imp = np.zeros(n)
-        while tm < min(stop_i, dur - 0.05):
-            imp[int(tm * sr)] += level * crng.uniform(0.7, 1.0) * (1.0 if tm > 0.2 else tm / 0.2 + 0.1)
-            tm += (1.0 / rate) * crng.uniform(0.9, 1.1)
-        y = _fftconv(imp, clap, n)
-        left += y * np.sqrt(1 - w)
-        right += y * np.sqrt(w)
-    fade = _fade_out(n, sr, min(1.0, 0.3 * dur))
-    return left * fade, right * fade
+    kind = seed % 3
+    people = (int(crng.integers(3, 7)), int(crng.integers(20, 35)), int(crng.integers(150, 230)))[kind]
+    n_cfg = min(people, 24)
+    L = int(0.02 * sr)
+    tt = np.arange(L) / sr
+    bank = np.zeros((n_cfg, L))
+    r = max(2, int(0.0003 * sr))
+    for c in range(n_cfg):
+        fr = np.exp(crng.uniform(np.log(700.0), np.log(2800.0)))
+        exc = crng.standard_normal(L) * np.exp(-tt / crng.uniform(0.0007, 0.0016))
+        exc[:r] *= np.linspace(0.0, 1.0, r)
+        res = np.exp(-tt / crng.uniform(0.00025, 0.0007)) * np.sin(TAU * fr * tt)  # a heavily damped cavity (Q ~ 1-6)
+        ring = np.convolve(exc, res)[:L]
+        clap = 0.75 * _norm(ring) + 0.35 * _norm(_air_band(exc, sr, (250.0, None, 2, 1.0)))
+        clap *= np.minimum(1.0, (L - np.arange(L)) / (0.3 * L))  # end on zero
+        bank[c] = clap / max(np.sqrt(np.mean(clap**2)), 1e-12)
+    cfg = np.arange(people) % n_cfg  # each person's usual hand shape
+    rate = crng.uniform(2.5, 4.5, people) if kind == 0 else crng.uniform(3.0, 5.5, people)
+    onset = crng.gamma(2.0, 0.06 if kind else 0.1, people)
+    stop = np.minimum(dur * crng.uniform(0.72, 0.97, people), dur - L / sr - 0.01)
+    level = crng.lognormal(0.0, 0.35, people)
+    w = crng.uniform(0.1, 0.9, people) if kind else crng.uniform(0.25, 0.75, people)
+    m = int(dur * 6.0) + 4
+    iv = (1.0 / rate)[:, None] * (1.0 + 0.04 * crng.standard_normal((people, m)))
+    times = onset[:, None] + np.cumsum(iv, axis=1) - iv[:, :1]
+    ok = times < stop[:, None]
+    amp = level[:, None] * np.exp(0.15 * crng.standard_normal((people, m)))
+    amp = amp * np.minimum(1.0, 0.4 + 0.6 * (times - onset[:, None]) / 0.4)  # the first claps are tentative
+    who = np.broadcast_to(np.arange(people)[:, None], times.shape)[ok]
+    shape = (cfg[who] + (crng.random(len(who)) < 0.3) * crng.integers(1, n_cfg, len(who))) % n_cfg  # and its slips
+    at = (times[ok] * sr).astype(int)
+    a = amp[ok]
+    out = []
+    for g in (np.sqrt(1.0 - w[who]), np.sqrt(w[who])):
+        y = np.zeros(n + L)
+        for s in range(0, len(at), 800):  # place the claps in chunks (bounded memory)
+            idx = (at[s : s + 800, None] + np.arange(L)).ravel()
+            val = ((a[s : s + 800] * g[s : s + 800])[:, None] * bank[shape[s : s + 800]]).ravel()
+            y += np.bincount(idx, weights=val, minlength=n + L)[: n + L]
+        out.append(y[:n])
+    p["reverb"], p["reverb_decay"] = ((0.16, 0.6), (0.22, 0.9), (0.3, 1.5))[kind]
+    fade = _fade_out(n, sr, min(0.3, 0.1 * dur))
+    return out[0] * fade, out[1] * fade
 
 
 def _pouring_water(ev, sr, rng, crng, p, seed):
@@ -1677,65 +1773,149 @@ def _car_horn(ev, sr, rng, crng, p, seed):
 
 
 def _siren(ev, sr, rng, crng, p, seed):
+    """An emergency-vehicle siren heard from the street. The driver is a
+    square-ish wave pushed hard through a horn loudspeaker (odd harmonics
+    strong, the horn's distortion adds even ones, a broad 1-2.5 kHz horn
+    resonance). The pitch pattern is the variant: a wail (a slow rise and a
+    slower fall), a yelp (a fast triangle sweep), a two-tone hi-lo. Then the
+    street: the vehicle approaches, passes or wails from a distance (travel
+    delay so the pitch Doppler-shifts, 1/r level, air absorption), facades
+    send back a few late echoes, and its own engine rumbles faintly."""
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
     kind = seed % 3
-    if kind == 0:  # wail: slow rise and fall
-        period = crng.uniform(3.5, 4.5)
-        u = (t % period) / period
-        f = 650 + 750 * np.where(u < 0.45, np.sin(0.5 * np.pi * u / 0.45), np.cos(0.5 * np.pi * (u - 0.45) / 0.55)) ** 1.2
-    elif kind == 1:  # yelp: fast sweeps
-        u = (t * crng.uniform(3.0, 3.6)) % 1.0
-        f = 700 + 800 * np.sin(np.pi * u) ** 0.8
+    if kind == 0:  # wail
+        period = crng.uniform(4.0, 5.5)
+        lo, hi = crng.uniform(600, 720), crng.uniform(1350, 1650)
+        u = ((t + crng.uniform(0.0, 0.25) * period) % period) / period
+        s = np.where(u < 0.42, np.sin(0.5 * np.pi * u / 0.42), np.cos(0.5 * np.pi * (u - 0.42) / 0.58) ** 1.3)
+        f = lo + (hi - lo) * s
+    elif kind == 1:  # yelp
+        rate = crng.uniform(2.6, 3.4)
+        lo, hi = crng.uniform(650, 800), crng.uniform(1500, 1750)
+        u = (t * rate + crng.uniform(0, 1)) % 1.0
+        tri = 1.0 - np.abs(2.0 * u - 1.0)
+        f = lo + (hi - lo) * (0.5 - 0.5 * np.cos(np.pi * tri)) ** 0.7
     else:  # two-tone hi-lo
-        f = np.where((t * 1.0 / 0.55).astype(int) % 2 == 0, 450.0, 600.0)
-        f = np.convolve(f, np.ones(int(0.01 * sr)) / int(0.01 * sr), mode="same")
-    amps = (1.0, 0.0, 0.33, 0.0, 0.2, 0.0, 0.14, 0.0, 0.1)
+        lo, hi = ((440.0, 587.0), (460.0, 610.0), (392.0, 523.0))[int(crng.integers(3))]
+        half = crng.uniform(0.5, 0.65)
+        f = np.where((t / half).astype(int) % 2 == 0, hi, lo)
+        k = int(0.015 * sr)
+        f = np.convolve(np.pad(f, (k, k), mode="edge"), np.ones(k) / k, mode="same")[k:-k]
+    amps = (1.0, 0.25, 0.55, 0.16, 0.34, 0.1, 0.22, 0.07, 0.14, 0.05, 0.09)
     y = _harmonic(f, sr, amps)
-    y = bandlimit(y, sr, 300.0, 5000.0, order=2)
-    env = _attack(n, sr, 0.0, 0.15) * _fade_out(n, sr, min(0.5, 0.2 * dur))
-    # a slow fade in level, as if passing
-    mono = y * env * (0.8 + 0.2 * _smooth(crng, n, sr, 0.4))
-    p["reverb"], p["reverb_decay"] = 0.25, 1.3
+    y = saturate(y * 1.4, 1.4)
+    y = _air_band(y, sr, (350.0, 7000.0, 2, 1.0), (1000.0, 2600.0, 2, 0.5))
+    # the street
+    mode = int(crng.integers(3))
+    v = crng.uniform(10.0, 17.0)
+    if mode == 0:  # approaching and passing
+        d0 = crng.uniform(10.0, 20.0)
+        x = v * (t - crng.uniform(0.6, 0.85) * dur)
+    elif mode == 1:  # passing by, then going away
+        d0 = crng.uniform(10.0, 20.0)
+        x = v * (t - crng.uniform(0.2, 0.4) * dur)
+    else:  # a block or two away, moving slowly across
+        d0 = crng.uniform(60.0, 120.0)
+        x = 0.4 * v * (t - 0.5 * dur)
+    dist = np.sqrt(x**2 + d0**2)
+    y = _air_absorb(y, sr, (25.0 / dist) ** 0.7) * (d0 / dist) ** 0.8
+    y = _air_doppler(y, sr, dist)
+    echo = _air_band(y, sr, (None, 3000.0, 2, 1.0))
+    wet = y.copy()
+    for _ in range(int(crng.integers(2, 5))):
+        d = int(crng.uniform(0.04, 0.3) * sr)
+        wet[d:] += crng.uniform(0.15, 0.35) * echo[: n - d]
+    rumble = _norm(_air_band(rng.standard_normal(n), sr, (40.0, 300.0, 2, 1.0))) * (d0 / dist) * 0.05
+    env = _attack(n, sr, 0.0, 0.12) * _fade_out(n, sr, min(0.5, 0.2 * dur))
+    mono = (_norm(wet) + rumble) * env
+    p["reverb"], p["reverb_decay"] = 0.25, 1.4
     return mono, _decorrelate(mono, sr, crng, span=0.04)
 
 
 def _engine(ev, sr, rng, crng, p, seed):
-    """A four-stroke engine: the firing rate (rpm/30 per cylinder pair) sets
-    a train of low exhaust pulses through a muffler (resonant, low), with
-    mechanical noise on top."""
+    """A four-cylinder four-stroke car engine. Each firing opens an exhaust
+    valve: a steep pressure pulse (blowdown) of about a tenth of the firing
+    interval, plus a burst of combustion noise that is a little different for
+    each cylinder (so the sound has the firing rate rpm*4/120 Hz, a full
+    harmonic series, and the half orders of a real, slightly unbalanced
+    engine). The pulses ring the exhaust pipe (an open pipe, ~65-95 Hz and its
+    harmonics) and leave through a muffler that opens up with the throttle;
+    the intake roars under load, the block and valve train add a steady
+    mechanical noise, a little louder on each firing. Idle
+    wobbles around 800 rpm; revving sweeps up hard on the throttle and falls
+    back off it; passing by puts the car on a road (tyre noise) and moves it
+    past the listener: travel delay (Doppler), 1/r, air absorption, pan."""
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
     kind = seed % 3
+    cyl = 4
+    idle = crng.uniform(720, 880)
     if kind == 0:
-        rpm = 800 * (1 + 0.03 * (_smooth(crng, n, sr, 2.0) - 0.5))
+        rpm = idle * (1 + 0.03 * (_smooth(crng, n, sr, 1.2) - 0.5) + 0.012 * (_smooth(crng, n, sr, 7.0) - 0.5))
+        thr = np.full(n, 0.12)
     elif kind == 1:
-        u = t / dur
-        rpm = 900 + 3200 * np.clip(np.sin(np.pi * np.clip(u * 1.2, 0, 1)) ** 1.5, 0, 1)
+        rpm = np.full(n, idle)
+        thr = np.full(n, 0.1)
+        blips = 1 if dur < 2.5 else int(crng.integers(1, 3))
+        for i in range(blips):
+            t0 = (0.1 + 0.45 * i + crng.uniform(0.0, 0.08)) * dur if blips > 1 else crng.uniform(0.12, 0.25) * dur
+            up = crng.uniform(0.3, 0.5) * min(1.0, dur / 3.0)
+            tau = crng.uniform(0.35, 0.6) * min(1.0, dur / 3.0)
+            top = crng.uniform(3500, 5500)
+            r = np.clip((t - t0) / up, 0.0, 1.0)
+            curve = np.where(t < t0 + up, 1.0 - (1.0 - r) ** 2, np.exp(-np.maximum(t - t0 - up, 0.0) / tau)) * (t >= t0)
+            rpm = np.maximum(rpm, idle + (top - idle) * curve)
+            thr = np.maximum(thr, np.where((t >= t0) & (t < t0 + up), 1.0, 0.0))
+        k = int(0.04 * sr)
+        thr = np.convolve(np.pad(thr, (k, k), mode="edge"), np.ones(k) / k, mode="same")[k:-k]
     else:
-        rpm = 2200 * (1 + 0.05 * _smooth(crng, n, sr, 1.0))
-    fire = rpm / 60.0 * 2.0  # 4 cylinders: 2 firings per revolution
-    if kind == 2:
-        # passing: doppler shift and a level swell
-        tc = dur * 0.5
-        v = 18.0
-        dist = np.sqrt((v * (t - tc)) ** 2 + 6.0**2)
-        radial = v**2 * (t - tc) / dist
-        fire = fire * 343.0 / (343.0 + radial)
-        level = 6.0 / dist
-    else:
-        level = np.ones(n)
+        rpm = crng.uniform(1900, 2700) * (1 + 0.02 * (_smooth(crng, n, sr, 1.0) - 0.5))
+        thr = np.full(n, 0.45)
+    fire = rpm * cyl / 120.0
     ph = np.cumsum(fire) / sr
-    idx = np.nonzero(np.diff(np.floor(ph)) > 0)[0]
-    pulses = np.zeros(n)
-    pulses[idx] = crng.uniform(0.75, 1.0, len(idx))
-    exhaust = _fftconv(pulses, _modes_ir((crng.uniform(90, 120), 240.0, 410.0, 680.0, 1100.0), (0.05, 0.035, 0.025, 0.018, 0.012),
-                                         (1, 0.8, 0.6, 0.4, 0.25), sr, n), n)
-    mech = _wash(rng, n, sr, 700.0, 4000.0) * (0.4 + 0.6 * np.clip((rpm - 700) / 3000, 0, 1))
-    rumble = _wash(rng, n, sr, 30.0, 150.0)
-    mono = (_norm(exhaust) + 0.2 * mech + 0.2 * rumble) * level
+    k = ph.astype(int)
+    frac = ph - k
+    kk = int(k[-1]) + 2
+    a = ((1.0 + 0.2 * crng.standard_normal(cyl))[np.arange(kk) % cyl]
+         * np.exp((0.1 if kind == 0 else 0.05) * crng.standard_normal(kk)))[k]
+    since = frac / fire  # seconds since this firing
+    pulse = (1.0 - np.exp(-frac / 0.05)) * np.exp(-frac / 0.25)
+    lb = int(0.012 * sr)
+    tb = np.arange(lb) / sr
+    bark_bank = _air_band(crng.standard_normal(cyl * lb), sr, (150.0, 3000.0, 2, 1.0)).reshape(cyl, lb) * np.exp(-tb / 0.005)
+    i = (since * sr).astype(int)
+    bark = np.where(i < lb, bark_bank[k % cyl, np.minimum(i, lb - 1)], 0.0)
+    exc = a * (pulse + 0.2 * bark / max(np.abs(bark_bank).max(), 1e-12))
+    exc = exc - np.mean(exc)
+    fp = crng.uniform(65.0, 95.0)
+    harm = np.array((1, 2, 3, 4, 5, 6, 7, 9, 11), dtype=float)
+    pipe = _fftconv(exc, _modes_ir(fp * harm, 0.16 / harm**0.5, 1.0 / harm**0.7, sr, n), n)
+    ex = _norm(exc) + 0.5 * _norm(pipe)
+    lo, mid, top = _air_band(ex, sr, (25.0, 350.0, 2, 1.0), (350.0, 1500.0, 2, 1.0), (1500.0, 5000.0, 2, 1.0), split=True)
+    exhaust = lo + (0.6 + 0.6 * thr) * mid + (0.2 + 0.4 * thr) * top
+    lt = int(0.002 * sr)
+    tick_bank = _air_band(crng.standard_normal(cyl * lt), sr, (2000.0, 6000.0, 2, 1.0)).reshape(cyl, lt) * np.exp(-np.arange(lt) / sr / 0.0006)
+    j = (((frac + 0.5) % 1.0) / fire * sr).astype(int)
+    tick = np.where(j < lt, tick_bank[k % cyl, np.minimum(j, lt - 1)], 0.0)
+    intake, mech = (_norm(b) for b in _air_band(rng.standard_normal(n), sr, (200.0, 1500.0, 2, 1.0), (400.0, 3000.0, 2, 1.0), split=True))
+    intake = intake * (0.5 + 0.5 * np.exp(-frac / 0.3)) * thr**2
+    mech = mech * (0.7 + 0.3 * np.exp(-frac / 0.2)) * (0.6 + 0.4 * thr)  # block, valvetrain, combustion roar
+    mono = _norm(exhaust) + 0.02 * _norm(tick) + 0.25 * intake + 0.06 * mech
+    mono = mono * (0.55 + 0.45 * thr) * (rpm / rpm.max()) ** 0.3
+    if kind == 2:
+        v = crng.uniform(12.0, 20.0)
+        d0 = crng.uniform(4.0, 8.0)
+        x = v * (t - crng.uniform(0.4, 0.6) * dur)
+        dist = np.sqrt(x**2 + d0**2)
+        tyres = _norm(_air_band(rng.standard_normal(n), sr, (300.0, 2500.0, 2, 0.3), (30.0, 200.0, 2, 0.25))) * 0.4
+        mono = _norm(mono) + tyres
+        mono = _air_doppler(_air_absorb(mono, sr, d0 / dist) * (d0 / dist), sr, dist)
+        side = x / dist
+        env = _attack(n, sr, 0.0, 0.05) * _fade_out(n, sr, min(0.4, 0.2 * dur))
+        return mono * np.sqrt(0.5 * (1 - side)) * env, mono * np.sqrt(0.5 * (1 + side)) * env
     mono = mono * _attack(n, sr, 0.0, 0.1) * _fade_out(n, sr, min(0.4, 0.2 * dur))
     return mono, _decorrelate(mono, sr, crng, span=0.02)
 
@@ -1791,47 +1971,107 @@ def _church_bell(ev, sr, rng, crng, p, seed):
 
 
 def _fireworks(ev, sr, rng, crng, p, seed):
+    """Aerial shells. A mortar thumps and the shell climbs (whistling, if it
+    is a whistle shell); at the top the bursting charge sends out a shock: a
+    short N-wave, a sharp crack over the whole band near by, duller far away
+    (a longer N-wave, air absorption). What follows is the outdoors: echoes
+    from buildings and terrain arriving over a second or two, and a rumbling
+    tail whose highs die first. A crackling shell's stars then pop by the
+    hundred, each a tiny N-wave. A distant show is many shells, some in quick
+    salvos, with overlapping echoes and faint launch thumps."""
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
     kind = seed % 3
-    left = np.zeros(n)
-    right = np.zeros(n)
+    # stereo buffers, one per component, filtered once at the end
+    crack = np.zeros((2, n))  # already band-limited per shell
+    echo = np.zeros((2, n))
+    body = np.zeros((2, n))
+    launch = np.zeros((2, n))
+    lift = np.zeros((2, n))
+    crackle = np.zeros((2, n))
+    whistle = np.zeros(n)
+    tails = np.zeros((3, 2, n))  # low / mid / high tail envelopes
+    taus = (0.9, 0.45, 0.15)
+    ln = int(0.03 * sr)
 
-    def shell(t_launch, whistle, crackle, level, far):
-        nonlocal left, right
-        flight = crng.uniform(0.9, 1.5)
-        t_burst = t_launch + flight
-        out = np.zeros(n)
-        if whistle and not far:
-            u = np.clip((t - t_launch) / flight, 0, 1)
-            f = 900 + 1800 * u
-            w = np.sin(TAU * np.cumsum(f) / sr) * np.sin(np.pi * u) ** 0.5 * (t >= t_launch) * (t < t_burst)
-            out += 0.2 * w
-        if t_burst < dur - 0.1:
-            b = int(t_burst * sr)
-            boom = bandlimit(_burst(rng, n, b, int(1.2 * sr), 0.18 if not far else 0.3, sr, rise=0.003 if not far else 0.02), sr, 35.0, 800.0 if not far else 300.0, order=2)
-            crack = bandlimit(_burst(rng, n, b, int(0.05 * sr), 0.006, sr, rise=0.0006), sr, 500.0, 6000.0, order=4)
-            out += _norm(boom) + (0.0 if far else 0.5) * _norm(crack)
-            if crackle:
-                cnt = 220
-                tt = t_burst + 0.25 + crng.gamma(2.0, 0.35, cnt)
-                cr = bandlimit(_grains(rng, n, tt, crng.uniform(0.3, 1.0, cnt) * np.exp(-(tt - t_burst) / 2.0), sr), sr, 1200.0, 7000.0, order=4)
-                out += 0.5 * _norm(cr)
-        w = crng.uniform(0.2, 0.8)
-        left += level * out * np.sqrt(1 - w)
-        right += level * out * np.sqrt(w)
+    def shell(t_launch, t_burst, whistling, crackling, level, far):
+        g = level * np.sqrt(np.array((1.0, 0.0)) + np.array((-1.0, 1.0)) * crng.uniform(0.2, 0.8))[:, None]
+        if 0.0 <= t_launch < dur:
+            la = int(t_launch * sr)
+            launch[:] += (0.25 if far < 0.5 else 0.12) * g * _burst(rng, n, la, int(0.12 * sr), 0.025, sr, rise=0.002)
+            lift[:] += 0.06 * g * _burst(rng, n, la, int(0.4 * sr), 0.12, sr, rise=0.01)
+            if whistling:
+                u = np.clip((t - t_launch) / (t_burst - t_launch), 0, 1)
+                f = crng.uniform(1100, 1500) + crng.uniform(800, 1300) * u
+                gate = np.sin(np.pi * np.clip(u * 1.05, 0, 1)) ** 0.5 * (t >= t_launch) * (t < t_burst)
+                whistle[:] += _air_narrow(rng, n, sr, f, 60.0) * gate
+        if t_burst >= dur - 0.15:
+            return
+        b = int(t_burst * sr)
+        k = max(4, int((0.0015 + 0.004 * far) * sr))
+        nw = np.zeros(ln + k)
+        nw[:k] = np.linspace(1.0, -1.0, k)
+        nw = _air_band(nw, sr, (30.0, 9000.0 - 6000.0 * far, 2, 1.0))
+        m = min(len(nw), n - b)
+        crack[:, b : b + m] += g * nw[:m]
+        for d in np.sort(crng.uniform(0.08, 1.3, int(crng.integers(3, 6)))):
+            j = b + int(d * sr)
+            if j < n:
+                m = min(len(nw), n - j)
+                echo[:, j : j + m] += crng.uniform(0.15, 0.4) / (1.0 + d) * g * nw[:m]
+        body[:] += (0.35 - 0.15 * far) * g * _burst(rng, n, b, int(0.4 * sr), 0.06, sr, rise=0.002)
+        after = np.maximum(t - t_burst, 0.0)
+        grow = (1.0 - np.exp(-after / 0.03)) * (t >= t_burst) * (0.25 + 0.3 * far)
+        for i, (tau, a) in enumerate(zip(taus, (1.0, 0.8, 0.4 * (1.0 - far)))):
+            tails[i] += a * g * grow * np.exp(-after / tau)
+        if crackling:
+            cnt = int(crng.integers(250, 450)) if far < 0.5 else int(crng.integers(60, 140))
+            tt = t_burst + crng.uniform(0.25, 0.5) + crng.gamma(2.2, 0.3, cnt)
+            amp = crng.lognormal(0.0, 0.5, cnt) * np.exp(-(tt - t_burst) / 2.0)
+            side = crng.uniform(0.0, 1.0, cnt)
+            for c, gc in enumerate((np.sqrt(1.0 - side), np.sqrt(side))):
+                crackle[c] += level * _grains(rng, n, tt, amp * gc, sr)
 
-    if kind == 2:
-        tm = 0.0
-        while tm < dur - 1.6:
-            shell(tm, False, crng.random() < 0.3, crng.uniform(0.4, 1.0), True)
-            tm += crng.uniform(0.4, 1.4)
-        p["reverb"], p["reverb_decay"] = 0.35, 2.2
+    if kind == 2:  # a distant show
+        tm = crng.uniform(0.0, 0.3)
+        while tm < dur - 1.0:
+            far = crng.uniform(0.5, 1.0)
+            shell(tm - crng.uniform(1.2, 2.0), tm, False, crng.random() < 0.3, crng.uniform(0.4, 1.0), far)
+            if crng.random() < 0.3:  # a salvo
+                shell(-1.0, tm + crng.uniform(0.05, 0.2), False, False, crng.uniform(0.3, 0.8), far)
+            tm += crng.uniform(0.4, 1.3)
+        p["reverb"], p["reverb_decay"] = 0.3, 2.0
+        hi_crackle = 5000.0
     else:
-        shell(0.0, True, kind == 1, 1.0, False)
+        flight = crng.uniform(0.9, 1.4) * min(1.0, dur / 3.0)
+        shell(0.02, 0.02 + flight, kind == 0 or crng.random() < 0.5, kind == 1, 1.0, crng.uniform(0.0, 0.25))
+        p["reverb"], p["reverb_decay"] = 0.25, 1.6
+        hi_crackle = 8000.0
+
+    def peak(x):
+        return max(float(np.abs(x).max()), 1e-12)
+
+    out = crack / peak(crack)
+    lows = _air_band(np.stack([launch, body]), sr, (40.0, 280.0, 2, 1.0))
+    out += 0.25 * lows[0] / peak(lows[0]) + 0.35 * lows[1] / peak(lows[1])
+    if np.abs(lift).max() > 0:
+        y = _air_band(lift, sr, (500.0, 3000.0, 2, 1.0))
+        out += 0.06 * y / peak(y)
+    e = _air_band(echo, sr, (None, 2500.0, 2, 1.0))
+    out += 0.5 * e / peak(crack)
+    noise = _air_band(rng.standard_normal((2, n)), sr, (40.0, 400.0, 2, 1.0), (300.0, 1500.0, 2, 1.0), (1500.0, 5000.0, 2, 1.0), split=True)
+    tail = sum(b / peak(b) * env for b, env in zip(noise, tails))
+    out += tail
+    if np.abs(crackle).max() > 0:
+        k = max(4, int(0.0005 * sr))
+        cr = np.stack([np.convolve(c, np.linspace(1.0, -1.0, k), mode="same") for c in crackle])
+        cr = _air_band(cr, sr, (600.0, hi_crackle, 2, 1.0))
+        out += (0.45 if kind != 2 else 0.25) * cr / peak(cr)
+    if np.abs(whistle).max() > 0:
+        out += 0.2 * whistle / peak(whistle)
     fo = _fade_out(n, sr, min(0.8, 0.25 * dur))
-    return left * fo, right * fo
+    return out[0] * fo, out[1] * fo
 
 
 FNS = {
