@@ -1,0 +1,76 @@
+{
+  "data": "data/degrade/train.jsonl",
+  "out": "runs/detail_v6m_smoke",
+  "seed": 0,
+  "sample_rate": 48000,
+  "n_frames": 256,
+  "n_fft": 1024,
+  "hop": 256,
+  "crop_mode": "random",
+  "normalize_stft": true,
+  "batch_size": 8,
+  "epochs": 3000,
+  "max_steps": 300,
+  "lr_g": 0.0001,
+  "lr_d": 0.0002,
+  "log_weight": 0.0,
+  "rel_weight": 0.0,
+  "band_weight": 2.0,
+  "band_weights": [
+    0.2,
+    0.2,
+    0.3,
+    0.5,
+    1.0,
+    0.25,
+    0.0
+  ],
+  "gan_loss": "hinge",
+  "adv_weight": 0.0,
+  "fm_weight": 0.0,
+  "rec_weight": 0.05,
+  "env_weight": 0.2,
+  "warmup_steps": 0,
+  "ramp_steps": 1,
+  "disc_min_bin": 85,
+  "workers": 2,
+  "log_every": 10,
+  "save_every": 100,
+  "model": {
+    "cond_dim": 32,
+    "base": 64,
+    "levels": 4,
+    "residual_scale": 0.5,
+    "noise_channels": 0,
+    "energy_gate": true,
+    "residual_min_bin": 43,
+    "noise_floor": 0.0,
+    "upsample": "resize_conv",
+    "upsample_mode": "bilinear",
+    "residual_taper_hz": [
+      8000.0,
+      9500.0
+    ],
+    "residual_env_bound": 0.0,
+    "env_kernel": [
+      9,
+      5
+    ],
+    "sample_rate": 48000,
+    "freq_bins": 257,
+    "residual_mode": "mask",
+    "mask_smooth": [
+      3,
+      3
+    ],
+    "quiet_gate_db": 30.0,
+    "quiet_ramp_db": 10.0
+  },
+  "disc": {
+    "base": 48,
+    "scales": 3
+  },
+  "overshoot_weight": 1.0,
+  "idem_weight": 5.0,
+  "idem_batch": 4
+}

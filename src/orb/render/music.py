@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..score import MusicTrack
-from .dsp import TAU, db_to_gain, lowpass, pan
+from .dsp import TAU, db_to_gain, lowpass, pan, shaped_burst
 
 
 def _additive(f: float, t: np.ndarray, harmonics: int, tilt: float, sr: int) -> np.ndarray:
@@ -53,9 +53,7 @@ def _note(instrument: str, midi: int, dur: float, vel: float, sr: int, seed: int
         out = np.sin(TAU * f * t + mod) * np.exp(-2.5 * t / max(dur, 0.1))
 
     elif instrument == "perc":
-        k = min(n, max(1, int(0.12 * sr)))
-        out = np.zeros(n)
-        out[:k] = rng.standard_normal(k) * np.exp(-np.linspace(0.0, 12.0, k))
+        out = shaped_burst(rng, n, int(0.12 * sr), 12.0, sr, lo=200.0, hi=10000.0)
         out += np.sin(TAU * 70.0 * t) * np.exp(-8.0 * t / max(dur, 0.1)) * 0.5
 
     elif instrument == "strings":

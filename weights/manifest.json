@@ -1,18 +1,19 @@
 {
   "files": {
     "planner.pt": {
-      "sha256": "15c024fed31f8fc7017b3f376f8cfe907955a3bbe87fc9dcb18d0d81543a82a9",
-      "bytes": 20363043
+      "sha256": "4327864eff1a26f5b79497e61a9dbc76bd97527189ed81463f6c90a3f35b235c",
+      "bytes": 20407139
     },
     "detail.pt": {
-      "sha256": "b4ef4db25f07a1b41f0978cb8f0cffd44e51e9d89a3679b79be27e36bcd28865",
-      "bytes": 41102897
+      "sha256": "5c59ae5271733cf00015f1ff8803d8ef0749aa41e02c984c1e567896da8acaf1",
+      "bytes": 36284145
     }
   },
   "params": {
-    "planner": 5085184,
-    "detail": 10269187,
-    "total": 15354371
+    "planner": 5096192,
+    "detail": 9064387,
+    "total": 14160579
   },
-  "planner_step": 12500
+  "planner_step": 39000,
+  "planner_vocab": 395
 }

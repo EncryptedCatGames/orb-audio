@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from orb.data.spec_dataset import SpecDataset  # noqa: E402
 from orb.grammar import spec_from_score  # noqa: E402
 from orb.model.planner import Planner  # noqa: E402
-from orb.model.spec_tokenizer import SpecGrammar, SpecTokenizer  # noqa: E402
+from orb.model.spec_tokenizer import NOBED, SpecGrammar, SpecTokenizer  # noqa: E402
 from orb.score import Score  # noqa: E402
 from orb.train.common import get_device  # noqa: E402
 
@@ -72,7 +72,8 @@ def main() -> None:
     tok = SpecTokenizer()
     dataset = SpecDataset(ROOT / args.data, tok, max_len=args.max_len)
     ckpt = torch.load(ROOT / args.checkpoint, map_location="cpu", weights_only=False)
-    model = Planner(tok.vocab_size, **ckpt["config"]["model"]).to(device)
+    vocab = int(ckpt["model"]["tok_emb.weight"].shape[0])
+    model = Planner(vocab, **ckpt["config"]["model"]).to(device)
     model.load_state_dict(ckpt["model"])
     model.eval()
 
@@ -103,7 +104,7 @@ def main() -> None:
         row = dataset.rows[i]
         true = spec_from_score(Score.from_dict(row["score"]))
         prompt = tok.prompt(row["caption"])
-        grammar = SpecGrammar()
+        grammar = SpecGrammar(no_bed=vocab > NOBED)
         out = model.generate(
             torch.tensor([prompt], device=device),
             max_new_tokens=args.max_len,

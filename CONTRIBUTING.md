@@ -21,12 +21,17 @@ pip install -e ".[train,dev]"
 
 ## Before you open a PR
 
-1. `pytest -q` passes (36 tests).
+1. `pytest -q` passes.
 2. `python examples/04_no_torch.py` still runs — the DSP path must never
    import torch.
 3. If you touched the renderer, run `python examples/01_generate.py` and check
    that the audit still passes.
-4. Keep the diff focused. Formatting-only changes should be separate.
+4. If you touched the MCP server, start it with `orb-mcp` and call a tool
+   from a client (see `docs/agents.md`).
+5. Keep the diff focused. Formatting-only changes should be separate.
+
+Maintainers: `scripts/release_check.sh` runs every local preflight check
+(tests, examples, weight hashes, LFS, Hugging Face cards) in one go.
 
 ## Adding a sound role
 

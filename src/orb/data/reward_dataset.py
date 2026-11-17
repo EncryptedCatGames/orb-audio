@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset

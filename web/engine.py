@@ -26,12 +26,11 @@ if str(ROOT / "src") not in sys.path:
 
 from orb.api import load_detail, load_planner  # noqa: E402
 from orb.eval.audit import audit_waveform, passes  # noqa: E402
-from orb.grammar import Spec, score_from_spec  # noqa: E402
+from orb.grammar import NO_BED, Spec, parse_caption, score_from_spec  # noqa: E402
 from orb.io import read_wav, write_wav  # noqa: E402
 from orb.model.detail import DetailUNet  # noqa: E402
 from orb.model.planner import Planner  # noqa: E402
 from orb.model.spec_tokenizer import SpecGrammar, SpecTokenizer  # noqa: E402
-from orb.render.detail import apply_detail  # noqa: E402
 from orb.render.mix import render  # noqa: E402
 
 PLANNER_PATH = os.environ.get("ORB_PLANNER", "weights/planner.pt")
@@ -212,22 +211,24 @@ class Engine:
                 data["cached"] = True
                 return data
 
-            tok, planner = self._ensure_planner()
-            spec = self._plan(tok, planner, cap)
+            # A bed-less caption ("no bed") is outside the planner's training
+            # distribution; render it straight from the parsed Spec instead.
+            try:
+                parsed = parse_caption(cap)
+            except ValueError as err:
+                raise BadInput(str(err)) from None
+            if parsed is not None and parsed.texture == NO_BED:
+                spec = parsed
+            else:
+                tok, planner = self._ensure_planner()
+                spec = self._plan(tok, planner, cap)
             score = score_from_spec(spec, with_music=False)
             score.validate()
 
-            dsp = render(score)
             detail_model = self._ensure_detail() if detail else None
-            if detail_model is not None:
-                audio = apply_detail(
-                    dsp,
-                    detail_model,
-                    seed=score.seed,
-                    strength=strength,
-                )
-            else:
-                audio = dsp
+            # render(..., detail=) routes the physical-model roles and scene
+            # beds around the detail stage (render.mix.apply_detail_routed).
+            audio = render(score, detail=detail_model, detail_strength=strength)
             if not np.isfinite(audio).all():
                 raise RuntimeError("non-finite samples in output")
 

@@ -73,6 +73,18 @@ def train_planner(
         )
 
     model = Planner(tok.vocab_size, **cfg.get("model", {})).to(device)
+    if cfg.get("init_from") and not resume:
+        # Warm start from an earlier planner. Rows for tokens it did not have
+        # (a grown vocabulary) keep their fresh init; the head is tied to them.
+        src = torch.load(cfg["init_from"], map_location="cpu", weights_only=False)["model"]
+        own = model.state_dict()
+        for k, v in src.items():
+            if k in own and own[k].shape == v.shape:
+                own[k] = v
+            elif k in own and k in ("tok_emb.weight", "head.weight") and own[k].shape[1:] == v.shape[1:]:
+                own[k][: v.shape[0]] = v
+        model.load_state_dict(own)
+        print(f"init from {cfg['init_from']}")
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=cfg.get("lr", 3e-4),

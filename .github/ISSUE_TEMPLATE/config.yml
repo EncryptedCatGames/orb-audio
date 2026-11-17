@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Try the live demo
+    url: https://huggingface.co/spaces/marcosmaceo/orb
+    about: Generate a cue in the browser before filing a report.
+  - name: Model card and weights
+    url: https://huggingface.co/marcosmaceo/orb-planner
+    about: Questions about the planner weights belong on the Hub discussion tab.

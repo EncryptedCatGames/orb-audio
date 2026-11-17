@@ -20,8 +20,7 @@ from orb.io import write_wav  # noqa: E402
 from orb.model.detail import DetailUNet  # noqa: E402
 from orb.model.planner import Planner  # noqa: E402
 from orb.model.spec_tokenizer import SpecGrammar, SpecTokenizer  # noqa: E402
-from orb.render.detail import apply_detail  # noqa: E402
-from orb.render.mix import render  # noqa: E402
+from orb.render.mix import apply_detail_routed, render_stems  # noqa: E402
 from orb.score import Score  # noqa: E402
 from orb.train.common import get_device  # noqa: E402
 
@@ -81,12 +80,10 @@ def main() -> None:
     score.validate()
 
     detail = load_detail(args.detail, device) if args.detail else None
-    dsp = render(score)
-    audio = (
-        apply_detail(dsp, detail, seed=score.seed, strength=args.detail_strength)
-        if detail is not None
-        else dsp
-    )
+    # Physical-model roles and scene beds bypass the detail stage.
+    stems = render_stems(score)
+    dsp = stems["mix"]
+    audio = apply_detail_routed(stems, detail, seed=score.seed, strength=args.detail_strength) if detail is not None else dsp
     if not np.isfinite(audio).all():
         raise SystemExit("non-finite samples in output")
     write_wav(ROOT / args.out, audio, score.sample_rate)

@@ -12,9 +12,12 @@ version: 0.1.0
 date-released: "2026-11-16"
 license: Apache-2.0
 repository-code: "https://github.com/stdevMac/orb-audio"
+url: "https://stdevmac.github.io/orb-audio/"
 keywords:
   - audio
   - sound-effects
   - text-to-audio
   - procedural-audio
   - dsp
+  - agents
+  - mcp

@@ -16,6 +16,7 @@ from ..grammar import (
     GAIN_LEVELS,
     MAX_EVENTS,
     MOODS,
+    NO_BED,
     PAN_LABELS,
     Spec,
     SpecEvent,
@@ -23,7 +24,6 @@ from ..grammar import (
     gain_value,
     pan_index,
     pan_value,
-    quantize_gain,
     quantize_time,
 )
 from ..score import EVENT_ROLES, TEXTURES
@@ -52,16 +52,39 @@ DIGIT = 273  # 10
 GAIN = 283  # 16
 PAN = 299  # 9
 HEX = 308  # 16
-TEXVAL = 324  # 8
+TEXVAL = 324  # 8: the original textures
 MOODVAL = 332  # 10
-ROLEVAL = 342  # 10
-VOCAB_SIZE = 352
+ROLEVAL = 342  # one per EVENT_ROLES entry (47 since v0.3)
+TEX_BASE_SLOTS = 8
+# Textures after the first 8 (ocean, stream, forest, night, traffic since
+# v0.3) take ids after the roles, so every v0.1/v0.2 token keeps its id.
+TEXEXT = ROLEVAL + len(EVENT_ROLES)
+# "No bed" (texture "none") gets one token after the extended textures, so a
+# free-text prompt like "a notification ding" can plan a dry cue (v0.4). A
+# planner trained before v0.4 has no such row; `SpecGrammar(no_bed=False)`
+# keeps it out of the mask.
+NOBED = TEXEXT + max(0, len(TEXTURES) - TEX_BASE_SLOTS)  # 394
+VOCAB_SIZE = NOBED + 1  # 395; 394 in v0.3, 358 in v0.2, 352 in v0.1
 
 DIGITS = tuple(range(DIGIT, DIGIT + 10))
 GAINS = tuple(range(GAIN, GAIN + GAIN_LEVELS))
 PANS = tuple(range(PAN, PAN + len(PAN_LABELS)))
 HEXS = tuple(range(HEX, HEX + 16))
-TEXVALS = tuple(range(TEXVAL, TEXVAL + len(TEXTURES)))
+
+
+def tex_token(i: int) -> int:
+    return TEXVAL + i if i < TEX_BASE_SLOTS else TEXEXT + i - TEX_BASE_SLOTS
+
+
+def tex_from_token(tok: int) -> int | None:
+    if TEXVAL <= tok < TEXVAL + min(TEX_BASE_SLOTS, len(TEXTURES)):
+        return tok - TEXVAL
+    if TEXEXT <= tok < TEXEXT + len(TEXTURES) - TEX_BASE_SLOTS:
+        return tok - TEXEXT + TEX_BASE_SLOTS
+    return None
+
+
+TEXVALS = tuple(tex_token(i) for i in range(len(TEXTURES)))
 MOODVALS = tuple(range(MOODVAL, MOODVAL + len(MOODS)))
 ROLEVALS = tuple(range(ROLEVAL, ROLEVAL + len(EVENT_ROLES)))
 
@@ -107,8 +130,13 @@ class SpecTokenizer:
         out: list[int] = []
         if add_special:
             out.append(BOS)
+        if spec.texture not in TEX_TO_ID and spec.texture != NO_BED:
+            raise ValueError(f"texture {spec.texture!r} cannot be tokenized")
+        if spec.bed_db is not None:
+            raise ValueError("bed_db cannot be tokenized: the planner always emits the default bed level")
         out += [SPEC, DUR] + _digits(round(spec.duration * 100), 5)
-        out += [TEX, TEXVAL + TEX_TO_ID[spec.texture], MOOD, MOODVAL + MOOD_TO_ID[spec.mood], EVENTS]
+        tex = NOBED if spec.texture == NO_BED else tex_token(TEX_TO_ID[spec.texture])
+        out += [TEX, tex, MOOD, MOODVAL + MOOD_TO_ID[spec.mood], EVENTS]
         for ev in spec.events:
             out += [EVENT, ROLEVAL + ROLE_TO_ID[ev.role], T] + _digits(round(ev.t * 100), 4)
             out += [D] + _digits(round(ev.dur * 100), 4)
@@ -152,7 +180,11 @@ class SpecTokenizer:
         take(DUR)
         duration = digits(5) / 100.0
         take(TEX)
-        texture = TEXTURES[one_of(TEXVAL, TEXVAL + len(TEXTURES), "texture")]
+        tex_tok = take()
+        tex_i = tex_from_token(tex_tok)
+        if tex_i is None and tex_tok != NOBED:
+            raise ValueError(f"expected texture, got {tex_tok}")
+        texture = NO_BED if tex_tok == NOBED else TEXTURES[tex_i]
         take(MOOD)
         mood = MOODS[one_of(MOODVAL, MOODVAL + len(MOODS), "mood")]
         take(EVENTS)
@@ -208,7 +240,9 @@ class SpecGrammar:
     enforced during generation, so a decoded Spec is always valid.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, no_bed: bool = True) -> None:
+        self.no_bed = no_bed  # False for planners trained before the NOBED token
+        self._bedless = False
         self.state = "START"
         self._left = 0
         self._events = 0
@@ -233,7 +267,7 @@ class SpecGrammar:
         if s == "TEX":
             return {TEX}
         if s == "TEX_VAL":
-            return set(TEXVALS)
+            return set(TEXVALS) | ({NOBED} if self.no_bed else set())
         if s == "MOOD":
             return {MOOD}
         if s == "MOOD_VAL":
@@ -241,6 +275,8 @@ class SpecGrammar:
         if s == "EVENTS":
             return {EVENTS}
         if s == "EVENT_OR_END":
+            if self._bedless and self._events == 0:
+                return {EVENT}  # a cue with no bed needs at least one event
             return {EVENT, END_EVENTS} if self._events < MAX_EVENTS else {END_EVENTS}
         if s == "ROLE":
             return set(ROLEVALS)
@@ -288,6 +324,7 @@ class SpecGrammar:
         elif s == "TEX":
             self.state = "TEX_VAL"
         elif s == "TEX_VAL":
+            self._bedless = token == NOBED
             self.state = "MOOD"
         elif s == "MOOD":
             self.state = "MOOD_VAL"

@@ -1,6 +1,6 @@
-import json
-
 import pytest
+
+pytest.importorskip("torch")  # these tests need the torch install (pip install -e ".[train]")
 
 from orb.model.tokenizer import ScoreTokenizer
 from orb.score import Score

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ORB · audio as a function</title>
+  <meta name="description" content="ORB is a tiny, from-scratch caption-to-audio engine for agents. Every sound is an editable JSON Spec, rendered to 48 kHz stereo with plain NumPy. The renderer runs in your browser.">
+  <meta name="theme-color" content="#efece5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161b18" media="(prefers-color-scheme: dark)">
+  <meta property="og:title" content="ORB · A sample is a file. This is a function.">
+  <meta property="og:description" content="A tiny caption-to-audio engine for agents. Exact timing, editable JSON, no samples. Runs in your browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://stdevmac.github.io/orb-audio/">
+  <meta property="og:image" content="https://stdevmac.github.io/orb-audio/assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=DM+Sans:opsz,wght@9..40,400..600&family=DM+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="wrap nav-row">
+      <a class="brand" href="#top" aria-label="ORB, back to top">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="16" cy="16" r="3.6" class="brand-dot"/></svg>
+        <span>ORB</span>
+      </a>
+      <a class="nav-link" href="https://github.com/stdevMac/orb-audio" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- 1. Hero -->
+    <section class="hero" id="top">
+      <div class="glow" aria-hidden="true"></div>
+      <div class="wrap">
+        <p class="eyebrow reveal">Caption-to-audio, from scratch</p>
+        <h1 class="reveal">A sample is a file.<br>This is a <em>function.</em></h1>
+        <p class="lede reveal">Type a sound. A 5M-parameter planner turns your caption into a typed JSON score, and plain NumPy renders it to 48&nbsp;kHz stereo, exact to the sample. Both run here, in your browser.</p>
+        <div class="gen reveal" id="gen">
+          <form class="gen-box" id="gen-form" novalidate>
+            <label class="sr-only" for="gen-input">Describe a sound, or paste an ORB caption</label>
+            <textarea id="gen-input" rows="3" maxlength="240" spellcheck="false" autocapitalize="off" autocomplete="off"
+              placeholder="door slam in the rain, then a low rumble"></textarea>
+            <div class="gen-bar">
+              <span class="status" data-engine-status role="status">engine idle</span>
+              <button class="btn btn-primary gen-go" id="gen-go" type="submit">Generate</button>
+            </div>
+          </form>
+          <div class="gen-examples">
+            <p class="gen-label">Exact captions, read by the planner</p>
+            <div class="gen-chips" id="gen-chips"></div>
+            <p class="gen-label">Or plain words, read by the planner itself</p>
+            <div class="gen-chips" id="gen-words"></div>
+          </div>
+          <div class="gen-helper" id="gen-helper" hidden>
+            <div class="gen-helper-head">
+              <span><b>Second opinion</b> · the keyword helper (rules, not the model) reads your words as this exact caption. Edit it and run it if the planner missed something.</span>
+            </div>
+            <textarea id="gen-caption" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Caption built by the prompt helper"></textarea>
+            <div class="gen-helper-row">
+              <p class="gen-notes" id="gen-notes"></p>
+              <button class="gen-run" id="gen-run" type="button">Run this caption instead</button>
+            </div>
+          </div>
+          <p class="gen-msg" id="gen-msg" role="status" aria-live="polite" hidden></p>
+          <div class="gen-progress" id="gen-progress" hidden>
+            <div class="gen-progress-bar"><i id="gen-progress-fill"></i></div>
+            <span id="gen-progress-text"></span>
+          </div>
+          <div class="gen-out" id="gen-out" hidden>
+            <div class="gen-out-main">
+              <button class="play" id="gen-play" type="button" aria-pressed="false" data-label="the generated sound" aria-label="Play the generated sound">
+                <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2.5v11l9-5.5z"/></svg>
+              </button>
+              <canvas id="gen-wave" aria-hidden="true"></canvas>
+            </div>
+            <div class="gen-meta">
+              <span id="gen-path"></span>
+              <span class="gen-meta-tools">
+                <button class="gen-tool" id="gen-remix" type="button">Shape it by hand</button>
+                <button class="gen-tool" id="gen-dl" type="button">Download WAV</button>
+              </span>
+            </div>
+            <details class="gen-spec">
+              <summary>Spec <span id="gen-spec-sum"></span></summary>
+              <p class="gen-cap" id="gen-cap"></p>
+              <pre class="try-spec" id="gen-spec"></pre>
+            </details>
+          </div>
+          <p class="gen-fine">The planner (5.1&nbsp;MB, int8) downloads on your first Generate. Sounds render with the NumPy DSP path; the 9M detail model that adds texture on top stays in Python, so the cues further down can sound a touch richer.</p>
+        </div>
+        <div class="cta reveal">
+          <a class="btn btn-quiet" href="https://github.com/stdevMac/orb-audio" rel="noopener">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </a>
+          <a class="btn btn-quiet" href="https://huggingface.co/marcosmaceo/orb-planner" rel="noopener">Hugging Face</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Shape it by hand -->
+    <section class="section shape" id="shape">
+      <div class="wrap">
+        <header class="section-head reveal">
+          <p class="kicker">Shape it by hand</p>
+          <h2>Every sound is a score you can edit.</h2>
+          <p>Pick a score, then drag a marker or a slider. Your browser re-renders it with the same engine, no model in the loop.</p>
+        </header>
+        <div class="try-hero reveal" id="try">
+        <div class="pg-chips" id="pg-chips" role="tablist" aria-label="Example scores"></div>
+        <div class="try-card" id="pg-card" role="tabpanel">
+          <div class="try-main">
+            <div class="pg-head">
+              <p class="pg-blurb" id="pg-blurb"></p>
+              <button class="pg-reset" id="pg-reset" type="button" disabled>Reset</button>
+            </div>
+            <div class="try-viz" id="pg-viz">
+              <canvas id="try-canvas" aria-hidden="true"></canvas>
+              <div class="pg-marks" id="pg-marks"></div>
+              <div class="playhead" id="try-playhead" hidden></div>
+            </div>
+            <div class="try-controls">
+              <button class="play" id="try-play" type="button" aria-pressed="false" aria-label="Play the score">
+                <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2.5v11l9-5.5z"/></svg>
+              </button>
+              <div class="pg-controls" id="pg-controls"></div>
+            </div>
+          </div>
+          <div class="try-panel">
+            <div class="try-panel-head">
+              <span>Spec</span>
+              <span class="pg-panel-tools">
+                <span class="status" data-engine-status role="status">engine idle</span>
+                <button class="pg-edit-toggle" id="pg-edit-toggle" type="button" aria-pressed="false" aria-controls="pg-json">Edit</button>
+              </span>
+            </div>
+            <pre class="try-spec" id="try-spec" aria-label="The Spec being played"></pre>
+            <div class="pg-json" id="pg-json" hidden>
+              <textarea id="pg-json-text" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Edit the Spec as JSON" aria-describedby="pg-json-msg"></textarea>
+              <div class="pg-json-row">
+                <p class="pg-json-msg" id="pg-json-msg" aria-live="polite"></p>
+                <button class="pg-json-go" id="pg-json-go" type="button">Render</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Film -->
+    <section class="film" aria-label="Demo film">
+      <div class="wrap">
+        <div class="video-frame reveal" id="video-frame">
+          <video id="demo-video" playsinline preload="none" hidden
+                 data-src="assets/orb-demo.mp4" data-poster="assets/orb-demo-poster.jpg"></video>
+          <button class="video-cover" id="video-cover" type="button" hidden aria-label="Play the demo film">
+            <span class="video-play" aria-hidden="true"><svg viewBox="0 0 16 16"><path fill="currentColor" d="M4.5 2.5v11l9-5.5z"/></svg></span>
+            <span class="video-label">Watch the film</span>
+          </button>
+          <div class="video-fallback" id="video-fallback" hidden>
+            <canvas id="video-fallback-canvas" aria-hidden="true"></canvas>
+            <p>The film is on its way. Every sound below is real ORB output.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Listen -->
+    <section class="section" id="listen">
+      <div class="wrap">
+        <header class="section-head reveal">
+          <p class="kicker">Listen</p>
+          <h2>Cues for real work.</h2>
+          <p>Forty-one cues for apps, edits, brands, games, nature and everyday life. Each one is a single JSON score, rendered without samples or recordings. The physically modelled sounds are pure DSP; the detail model adds texture to the rest.</p>
+        </header>
+        <div class="lib-bar reveal">
+          <div class="lib-tabs" id="lib-tabs" role="tablist" aria-label="Cue groups"></div>
+          <button class="lib-playall" id="lib-playall" type="button" aria-pressed="false">
+            <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2.5v11l9-5.5z"/></svg>
+            <span>Play all</span>
+          </button>
+        </div>
+        <div class="gallery" id="gallery" role="tabpanel">
+          <p class="loading">Loading cues…</p>
+        </div>
+        <div class="blocks reveal" id="blocks-wrap" hidden>
+          <p class="kicker">Building blocks</p>
+          <p class="blocks-note">Each one plays a single role. Every cue above is a short score built from roles like these.</p>
+          <div class="blocks-row" id="blocks"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Agents -->
+    <section class="section" id="agents">
+      <div class="wrap agents">
+        <header class="section-head reveal">
+          <p class="kicker">For agents</p>
+          <h2>Built for agents.</h2>
+          <p>Add ORB as an MCP server and your agent can score a scene, check the audit, and patch one field instead of regenerating.</p>
+        </header>
+        <pre class="code reveal" aria-label="MCP server configuration, .mcp.json"><code><span class="p">{</span>
+  <span class="k">"mcpServers"</span><span class="p">: {</span>
+    <span class="k">"orb"</span><span class="p">: {</span> <span class="k">"command"</span><span class="p">:</span> <span class="s">"orb-mcp"</span> <span class="p">}</span>
+  <span class="p">}</span>
+<span class="p">}</span></code></pre>
+      </div>
+    </section>
+
+    <!-- 6. Numbers -->
+    <section class="numbers" aria-label="Key numbers">
+      <div class="wrap">
+        <ul class="stats reveal">
+          <li><b>5.1M</b><span>planner parameters, 20.4&nbsp;MB. Runs on this page.</span></li>
+          <li><b>9.1M</b><span>optional detail pass, 36.3&nbsp;MB, CC&nbsp;BY-NC&nbsp;4.0. Python only.</span></li>
+          <li><b>48 kHz</b><span>stereo, every event placed to the sample</span></li>
+          <li><b>NumPy</b><span>is all the DSP renderer needs</span></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <!-- 7. Footer -->
+  <footer class="foot">
+    <div class="wrap">
+      <nav class="foot-links" aria-label="Project links">
+        <a href="https://github.com/stdevMac/orb-audio" rel="noopener">GitHub</a>
+        <a href="https://huggingface.co/marcosmaceo/orb-planner" rel="noopener">Model</a>
+        <a href="https://huggingface.co/spaces/marcosmaceo/orb" rel="noopener">Space</a>
+        <a href="https://huggingface.co/datasets/marcosmaceo/orb-scores-100k" rel="noopener">Dataset</a>
+        <a href="https://github.com/stdevMac/orb-audio/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+      </nav>
+      <p class="foot-note">Honest limits: ORB synthesizes, it does not record, so a real door slam still wins. 47 roles and 13 beds, no music, no voices or animal calls yet. The planner reads its caption grammar exactly and plain words on a best-effort basis (about 60–70% of test prompts planned fully right; for a sound it has no role for, it may invent the nearest one); the second-opinion helper is plain keyword rules. The detail model is subtle: it passes the no-noise gate but misses its 10% restoration target (+0.84%), and takes tens of seconds per cue on a CPU.</p>
+      <p class="foot-meta">ORB 0.1.0 · every sound on this page was synthesized from a JSON score · film photos by Theo Tab and Ales Nesetril on Unsplash; <a href="https://github.com/stdevMac/orb-audio/blob/main/NOTICE" rel="noopener">credits</a></p>
+    </div>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

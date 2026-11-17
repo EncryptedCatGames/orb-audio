@@ -4,11 +4,21 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..score import Score
+from ..grammar import DEFAULT_BED_DB
+from ..score import AMBIENCE_TEXTURES, Score
 from .dsp import db_to_gain, rms
-from .events import render_event
+from .events import FOLEY_ROLES, render_event
 from .music import render_track
 from .texture import render_texture
+
+END_FADE = 0.01  # s
+
+# The neural detail stage was trained on the original ten roles and eight
+# noise beds. The physical models (every foley, nature, everyday and action
+# role) and the scene beds are rendered at full band already, and the stage
+# can only blur them, so they bypass it: see `apply_detail_routed`.
+DSP_ONLY_ROLES = frozenset(FOLEY_ROLES)
+DSP_ONLY_TEXTURES = frozenset(AMBIENCE_TEXTURES)
 
 
 def _add_at(out: np.ndarray, sig: np.ndarray, t: float, sr: int) -> None:
@@ -53,19 +63,38 @@ def render_stems(score: Score, normalize: bool = True) -> dict[str, np.ndarray]:
     music = np.zeros((n, 2), dtype=np.float64)
     texture = np.zeros((n, 2), dtype=np.float64)
     events = np.zeros((n, 2), dtype=np.float64)
+    # The part of `texture` and `events` that bypasses the detail stage.
+    # Tracked separately so the sums above stay bit-identical.
+    tex_dsp = np.zeros((n, 2), dtype=np.float64)
+    ev_dsp = np.zeros((n, 2), dtype=np.float64)
 
     for i, track in enumerate(score.music):
         music += render_track(track, sr, n, seed=score.seed + i)
     for i, tex in enumerate(score.textures):
-        _add_at(texture, render_texture(tex, sr, seed=score.seed + 100 + i), tex.t, sr)
+        clip = render_texture(tex, sr, seed=score.seed + 100 + i)
+        _add_at(texture, clip, tex.t, sr)
+        if tex.character in DSP_ONLY_TEXTURES:
+            _add_at(tex_dsp, clip, tex.t, sr)
     for i, event in enumerate(score.events):
         seed = event.seed if event.seed else score.seed + 200 + i
-        _add_at(events, render_event(event, sr, seed=seed), event.t, sr)
+        # tail=True: reverb rings out past the event instead of being cut.
+        clip = render_event(event, sr, seed=seed, tail=True)
+        _add_at(events, clip, event.t, sr)
+        if event.role in DSP_ONLY_ROLES:
+            _add_at(ev_dsp, clip, event.t, sr)
 
-    # A texture is continuous, so removing its mean cannot open a hole in
-    # silence. Slow LFOs otherwise leave a DC drift over a long cue.
-    texture -= texture.mean(axis=0, keepdims=True)
+    # Each texture removes its own DC before its edge fades (render_texture);
+    # removing the stem mean here would put a step back at sample 0.
     music -= music.mean(axis=0, keepdims=True)
+
+    # A reverb tail or a note that runs past the end of the cue is cut there;
+    # fade the last few ms so the cut is not a step.
+    b = min(n, int(END_FADE * sr))
+    if b > 1:
+        ramp = np.linspace(1.0, 0.0, b)[:, None]
+        events[n - b :] *= ramp
+        music[n - b :] *= ramp
+        ev_dsp[n - b :] *= ramp
 
     if normalize:
         # The foreground sets the loudness; the bed is placed relative to it.
@@ -81,7 +110,7 @@ def render_stems(score: Score, normalize: bool = True) -> dict[str, np.ndarray]:
             # The bed sits `gain_db` below the foreground's *active* loudness,
             # so its level does not depend on how sparse the events are.
             fg_ref = _active_ref(fg, sr) * g_fg
-            bed_db = score.textures[0].gain_db if score.textures else -30.0
+            bed_db = score.textures[0].gain_db if score.textures else DEFAULT_BED_DB
             bed_target = fg_ref * db_to_gain(bed_db)
             tex_rms = max(rms(texture), 1e-9)
             g_tex = min(bed_target / tex_rms, fg_ref / tex_rms)
@@ -97,6 +126,8 @@ def render_stems(score: Score, normalize: bool = True) -> dict[str, np.ndarray]:
         music *= g_fg
         events *= g_fg
         texture *= g_tex
+        ev_dsp *= g_fg
+        tex_dsp *= g_tex
 
     mix = music + texture + events
 
@@ -108,13 +139,41 @@ def render_stems(score: Score, normalize: bool = True) -> dict[str, np.ndarray]:
         texture *= s
         events *= s
         mix *= s
+        ev_dsp *= s
+        tex_dsp *= s
 
     return {
         "music": music.astype(np.float32),
         "texture": texture.astype(np.float32),
         "events": events.astype(np.float32),
         "mix": mix.astype(np.float32),
+        # Not a stem of its own (it overlaps `texture` and `events`): the
+        # share of the mix that skips the detail stage.
+        "dsp_only": (ev_dsp + tex_dsp).astype(np.float32),
     }
+
+
+def apply_detail_routed(stems: dict[str, np.ndarray], detail, seed: int = 0, strength: float = 1.0) -> np.ndarray:
+    """Run the detail stage on the part of the mix it was trained on.
+
+    The physical-model roles and the scene beds (`stems["dsp_only"]`) are
+    added back after the stage, untouched. A cue without them goes through
+    exactly the original path, so its output is bit-identical to before.
+    """
+    from .detail import apply_detail  # torch: imported only when used
+
+    mix = stems["mix"]
+    keep = stems.get("dsp_only")
+    if keep is None or not np.any(keep):
+        return np.asarray(apply_detail(mix, detail, seed=seed, strength=strength), dtype=np.float32)
+    rest = mix - keep
+    if not np.any(np.abs(rest) > 1e-7):
+        return mix.astype(np.float32)
+    out = np.asarray(apply_detail(rest.astype(np.float32), detail, seed=seed, strength=strength), dtype=np.float64) + keep
+    peak = float(np.abs(out).max()) if out.size else 0.0
+    if peak > 0.98:
+        out *= 0.98 / peak
+    return out.astype(np.float32)
 
 
 def render(
@@ -128,15 +187,8 @@ def render(
     `detail` is an optional `DetailUNet`; when given, the neural detail stage
     runs after the DSP mix and before the result is returned.
     """
-    audio = render_stems(score, normalize)["mix"]
-    if detail is not None:
-        # Imported here so the DSP path stays numpy-only and never loads torch.
-        from .detail import apply_detail
-
-        audio = apply_detail(
-            audio,
-            detail,
-            seed=score.seed,
-            strength=detail_strength,
-        ).astype(np.float32)
-    return audio
+    stems = render_stems(score, normalize)
+    if detail is None:
+        return stems["mix"]
+    # The physical models and scene beds bypass the detail stage.
+    return apply_detail_routed(stems, detail, seed=score.seed, strength=detail_strength)

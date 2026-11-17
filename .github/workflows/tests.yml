@@ -3,11 +3,25 @@ name: tests
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
+    name: full pipeline (py${{ matrix.python }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -15,23 +29,57 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
+          cache: pip
 
-      - name: Install
+      - name: Install (CPU torch)
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install safetensors
+          pip install -e ".[train,dev]"
+
+      - name: Weights match manifest
+        run: |
+          python - <<'EOF'
+          import hashlib, json, pathlib
+          m = json.loads(pathlib.Path("weights/manifest.json").read_text())
+          p = pathlib.Path("weights/planner.pt")
+          got = hashlib.sha256(p.read_bytes()).hexdigest()
+          want = m["files"]["planner.pt"]["sha256"]
+          assert got == want, f"planner.pt sha256 {got} != manifest {want} (is Git LFS pulled?)"
+          print("planner.pt ok", got)
+          EOF
 
       - name: Tests
         run: pytest -q
 
-      - name: DSP path must not need torch
-        run: python examples/04_no_torch.py
-
       - name: Examples
         run: |
+          python examples/01_generate.py
           python examples/02_edit_spec.py
           python examples/03_variants.py --n 2
-          python examples/01_generate.py
+
+      - name: CLI
+        run: orb-generate "4.00-second playful cue, vinyl bed, with ui pop @0.60 0.16s -12dB R1 #73" --out /tmp/cue.wav --json
+
+  dsp-only:
+    name: DSP path without torch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (numpy only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          python -c "import importlib.util as u, sys; sys.exit(1 if u.find_spec('torch') else 0)"
+
+      - name: Render without torch or weights
+        run: |
+          python examples/04_no_torch.py
+          python examples/02_edit_spec.py
+          python examples/03_variants.py --n 2

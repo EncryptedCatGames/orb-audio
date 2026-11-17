@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..score import Texture
+from ..score import AMBIENCE_TEXTURES, Texture
 from .dsp import TAU, db_to_gain
+
+FADE_IN = 0.03  # s
+FADE_OUT = 0.08  # s
+GRAIN_ATTACK = 0.0015  # s
 
 PRESETS: dict[str, dict] = {
     "room_cold": dict(
@@ -48,7 +52,7 @@ PRESETS: dict[str, dict] = {
         grain=(12.0, 0.02),
     ),
     "sci_fi": dict(
-        points=[(20, -10), (60, -6), (150, -12), (500, -18), (2000, -22), (8000, -30)],
+        points=[(20, -10), (60, -6), (150, -12), (500, -18), (2000, -24), (8000, -38)],
         lfo=(0.2, 0.3),
         grain=(1.5, 0.05),
     ),
@@ -128,6 +132,10 @@ def _layer(n: int, sr: int, preset: dict, bands: list[float] | None, rng: np.ran
         center = float(np.exp(rng.uniform(np.log(600.0), np.log(6000.0))))
         grain = _band_grain(rng, dur, sr, center, q=float(rng.uniform(2.0, 6.0)))
         env = np.exp(-np.linspace(0.0, 6.0, dur))
+        # A grain that starts at full amplitude is a step: a broadband tick
+        # up to Nyquist. A ~1.5 ms raised-cosine attack keeps it in band.
+        a = min(dur // 4, max(1, int(GRAIN_ATTACK * sr)))
+        env[:a] *= 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, a))
         amp = bed_rms * float(rng.uniform(1.5, 3.5))
         sig[pos : pos + dur] += grain * env * amp
 
@@ -137,6 +145,20 @@ def _layer(n: int, sr: int, preset: dict, bands: list[float] | None, rng: np.ran
 def render_texture(tx: Texture, sr: int, seed: int = 0) -> np.ndarray:
     """Render one texture to stereo, shape (n, 2), with a seamless loop point."""
     n = max(1, int(tx.dur * sr))
+    if tx.character in AMBIENCE_TEXTURES:
+        # Scenes built from event models (v0.3); no loop tiling, the whole
+        # bed is rendered.
+        from .ambience import render_ambience
+
+        raw = render_ambience(tx, sr, seed)
+        mid = 0.5 * (raw[:, 0] + raw[:, 1])
+        side = 0.5 * (raw[:, 0] - raw[:, 1]) * min(1.0, tx.width / 0.7)
+        out = np.stack([mid + side, mid - side], axis=1)
+        out -= out.mean(axis=0, keepdims=True)
+        r = float(np.sqrt(np.mean(out**2) + 1e-12))
+        out *= 0.08 / max(r, 1e-9)
+        out = _edge_fades(out, sr)
+        return out * db_to_gain(tx.gain_db)
     preset = PRESETS[tx.character]
     rng = np.random.default_rng(seed)
 
@@ -163,6 +185,22 @@ def render_texture(tx: Texture, sr: int, seed: int = 0) -> np.ndarray:
         right = np.tile(loop[:, 1], reps)[:n]
 
     out = np.stack([left, right], axis=1)
+    # Remove DC here, before the fades, so the bed starts and ends at exactly
+    # zero. (Doing it on the summed stem would re-open a step at sample 0.)
+    out -= out.mean(axis=0, keepdims=True)
     r = float(np.sqrt(np.mean(out**2) + 1e-12))
     out *= 0.08 / max(r, 1e-9)
+    out = _edge_fades(out, sr)
     return out * db_to_gain(tx.gain_db)
+
+
+def _edge_fades(x: np.ndarray, sr: int) -> np.ndarray:
+    """Raised-cosine fade-in and fade-out, so the bed never starts or stops on a step."""
+    n = len(x)
+    a = min(n // 4, int(FADE_IN * sr))
+    b = min(n // 4, int(FADE_OUT * sr))
+    if a > 1:
+        x[:a] *= (0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, a)))[:, None]
+    if b > 1:
+        x[n - b :] *= (0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, b)))[:, None]
+    return x

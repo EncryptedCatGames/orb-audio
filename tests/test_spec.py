@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("torch")  # these tests need the torch install (pip install -e ".[train]")
+
 import numpy as np
 
 from orb.grammar import Spec, SpecEvent, caption, sample_spec, score_from_spec, spec_from_score

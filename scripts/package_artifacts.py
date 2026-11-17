@@ -81,7 +81,7 @@ def main() -> None:
     meta["params"]["total"] = meta["params"]["planner"] + total
     meta["planner_step"] = pck.get("step")
 
-    for name in ("spec_v5.json", "detail_v5.json"):
+    for name in ("spec_v5.json", "detail_v6.json"):
         src = ROOT / "configs" / name
         if src.exists():
             shutil.copy2(src, out / name)

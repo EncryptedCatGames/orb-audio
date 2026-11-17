@@ -7,13 +7,21 @@ caption, and `exact` records whether the planner reproduced the intended Spec.
 The audio itself is rendered from the planned Spec (what the model actually
 said), so the site never shows audio that disagrees with its spec panel.
 
+UI-style examples use ``texture: "none"`` (digital silence between events).
+The caption grammar always names a bed and the planner was never trained
+without one, so those examples are rendered straight from the Spec, the same
+way ``orb_render_spec`` and ``orb.api.render_spec`` do. They are marked
+``"planned": false`` and carry ``"exact": null``.
+
 Run:  .venv-torch/bin/python scripts/build_web_examples.py [--force]
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import time
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,13 +34,16 @@ if str(ROOT) not in sys.path:
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from orb.grammar import Spec, SpecEvent, caption, score_from_spec  # noqa: E402
-from orb.io import read_wav  # noqa: E402
+from orb.eval.audit import audit_waveform, passes  # noqa: E402
+from orb.grammar import NO_BED, Spec, SpecEvent, caption, score_from_spec  # noqa: E402
+from orb.io import read_wav, write_wav  # noqa: E402
+from orb.render.mix import render  # noqa: E402
 from web.engine import (  # noqa: E402
     DETAIL_PATH,
     PLANNER_PATH,
     SAMPLE_RATE,
     Engine,
+    compute_peaks,
     spec_to_dict,
 )
 
@@ -54,7 +65,7 @@ EXAMPLES: list[tuple[str, Spec, bool]] = [
     ),
     (
         "ui_pop_soft",
-        Spec(4.0, "vinyl", "playful", [SpecEvent("ui_pop", 0.60, 0.16, -12.0, 0.25, 0x73)]),
+        Spec(4.0, NO_BED, "playful", [SpecEvent("ui_pop", 0.60, 0.16, -12.0, 0.25, 0x73)]),
         True,
     ),
     (
@@ -86,7 +97,7 @@ EXAMPLES: list[tuple[str, Spec, bool]] = [
         "scene_ui_pack",
         Spec(
             6.0,
-            "vinyl",
+            NO_BED,
             "playful",
             [
                 SpecEvent("ui_pop", 0.40, 0.16, -12.0, -0.5, 0x11),
@@ -119,6 +130,12 @@ EXAMPLES: list[tuple[str, Spec, bool]] = [
         False,
     ),
     (
+        # The same pop on a bed, so the site still shows the ambience option.
+        "ui_pop_vinyl",
+        Spec(4.0, "vinyl", "playful", [SpecEvent("ui_pop", 0.60, 0.16, -12.0, 0.25, 0x73)]),
+        False,
+    ),
+    (
         "scene_trailer_dsp",
         Spec(
             12.0,
@@ -145,6 +162,39 @@ def high_band_ratio(path: Path, cutoff: float = 2000.0) -> float:
     freqs = np.fft.rfftfreq(len(mono), 1.0 / sr)
     total = float(power.sum()) + 1e-12
     return float(power[freqs >= cutoff].sum() / total)
+
+
+def render_direct(engine: Engine, intended: Spec, cap: str, force: bool) -> dict:
+    """Render a Spec without the planner (DSP only), cached like Engine.generate."""
+    spec_dict = spec_to_dict(intended)
+    key = "spec|" + json.dumps(spec_dict, sort_keys=True)
+    cache_id = hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
+    wav_path = engine.out_dir / f"{cache_id}.wav"
+    started = time.perf_counter()
+    score = score_from_spec(intended, with_music=False)
+    score.validate()
+    if force or not wav_path.exists():
+        audio = render(score)
+        if not np.isfinite(audio).all():
+            raise RuntimeError("non-finite samples in output")
+        write_wav(wav_path, audio, score.sample_rate)
+    audio, sr = read_wav(wav_path)
+    audit = audit_waveform(audio, sr)
+    return {
+        "id": cache_id,
+        "caption": cap,
+        "duration_s": float(score.duration),
+        "spec": spec_dict,
+        "audit": audit,
+        "passes": bool(passes(audit)),
+        "peaks": compute_peaks(audio),
+        "ms": int((time.perf_counter() - started) * 1000),
+        "detail": False,
+        "detail_applied": False,
+        "strength": 1.0,
+        "url": f"/audio/{cache_id}.wav",
+        "cached": False,
+    }
 
 
 def model_info() -> dict:
@@ -175,15 +225,20 @@ def main() -> None:
     engine.warmup()
 
     entries: list[dict] = []
-    rows: list[tuple[str, bool, bool, float, float, float, int, bool]] = []
+    rows: list[tuple[str, bool, bool | None, bool, float, float, float, int]] = []
 
     for index, (name, intended, detail) in enumerate(EXAMPLES, start=1):
         print(f"[{index}/{len(EXAMPLES)}] {name}", file=sys.stderr, flush=True)
         cap = caption(score_from_spec(intended, with_music=False))
-        result = engine.generate(cap, detail=detail, strength=1.0, force=args.force)
-        exact = result["spec"] == spec_to_dict(intended)
+        if intended.texture == NO_BED:
+            result = render_direct(engine, intended, cap, force=args.force)
+            detail, exact = False, None
+            entry = {"name": name, **result, "exact": None, "planned": False}
+        else:
+            result = engine.generate(cap, detail=detail, strength=1.0, force=args.force)
+            exact = result["spec"] == spec_to_dict(intended)
+            entry = {"name": name, **result, "exact": exact, "planned": True}
         hf = high_band_ratio(engine.out_dir / f"{result['id']}.wav")
-        entry = {"name": name, **result, "exact": exact}
         entries.append(entry)
         rows.append(
             (
@@ -215,14 +270,15 @@ def main() -> None:
     for name, detail, exact, ok, peak, hf, centroid, ms in rows:
         print(
             f"{name:<20} {'on' if detail else 'off':<7} "
-            f"{'yes' if exact else 'NO':<6} {'yes' if ok else 'NO':<5} "
+            f"{'spec' if exact is None else 'yes' if exact else 'NO':<6} {'yes' if ok else 'NO':<5} "
             f"{peak:>6.3f} {hf * 100:>6.1f}% {centroid / 1000:>7.2f}k {ms:>7d}"
         )
     exact_count = sum(1 for row in rows if row[2])
+    planned = sum(1 for row in rows if row[2] is not None)
     pass_count = sum(1 for row in rows if row[3])
     print()
     print(
-        f"{len(rows)} cues · {exact_count} exact · {pass_count} audit pass · "
+        f"{len(rows)} cues · {exact_count}/{planned} planned exact · {pass_count} audit pass · "
         f"wrote {EXAMPLES_PATH.relative_to(ROOT)}"
     )
 

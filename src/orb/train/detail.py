@@ -22,7 +22,9 @@ from .losses import (
     istft,
     log_mag_loss,
     multi_res_stft_loss,
+    overshoot_loss,
     relative_mag_loss,
+    residual_idempotence_loss,
 )
 
 
@@ -131,7 +133,18 @@ def train_detail(cfg: dict, resume: str | None = None) -> DetailUNet:
             # Generator step
             opt_g.zero_grad(set_to_none=True)
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
-                fake = x + generator(x, cond, _noise_like(x, generator.noise_channels))
+                idem_weight = cfg.get("idem_weight", 0.0)
+                n_idem = min(int(cfg.get("idem_batch", x.shape[0] // 2)), x.shape[0]) if idem_weight > 0 else 0
+                if n_idem:
+                    # One pass over [degraded batch, a few real clips]: the real
+                    # clip is already full-band, so the model should leave it alone.
+                    inp = torch.cat([x, y[:n_idem]], dim=0)
+                    res_all = generator(inp, torch.cat([cond, cond[:n_idem]], dim=0),
+                                        _noise_like(inp, generator.noise_channels))
+                    residual, idem_res = res_all[: x.shape[0]], res_all[x.shape[0] :]
+                else:
+                    residual = generator(x, cond, _noise_like(x, generator.noise_channels))
+                fake = x + residual
                 fake_wav = istft(fake, cfg.get("n_fft", 1024), cfg.get("hop", 256))
                 real_wav = istft(y, cfg.get("n_fft", 1024), cfg.get("hop", 256))
                 log_weight = cfg.get("log_weight", 0.0)
@@ -150,6 +163,12 @@ def train_detail(cfg: dict, resume: str | None = None) -> DetailUNet:
                     sr=cfg.get("sample_rate", 48000),
                     n_fft=cfg.get("n_fft", 1024),
                 )
+                over_weight = cfg.get("overshoot_weight", 0.0)
+                loss_over = overshoot_loss(fake, y) if over_weight > 0 else torch.zeros((), device=device)
+                if n_idem:
+                    loss_idem = residual_idempotence_loss(idem_res, y[:n_idem])
+                else:
+                    loss_idem = torch.zeros((), device=device)
                 if disc_on:
                     loss_adv = (
                         g_adv_loss_hinge(discriminator, disc_in(fake))
@@ -176,6 +195,8 @@ def train_detail(cfg: dict, resume: str | None = None) -> DetailUNet:
                     + cfg.get("band_weight", 0.0) * loss_band
                     + adv_eff * loss_adv
                     + fm_weight * loss_fm
+                    + over_weight * loss_over
+                    + idem_weight * loss_idem
                 )
             scaler_g.scale(loss_g).backward()
             scaler_g.unscale_(opt_g)
@@ -195,11 +216,14 @@ def train_detail(cfg: dict, resume: str | None = None) -> DetailUNet:
                     band=float(loss_band.detach()),
                     adv=float(loss_adv.detach()),
                     fm=float(loss_fm.detach()),
+                    over=float(loss_over.detach()),
+                    idem=float(loss_idem.detach()),
                 )
                 print(
                     f"step {step:6d}  g {float(loss_g.detach()):.4f}  d {float(loss_d.detach()):.4f} "
                     f"rec {float(loss_rec.detach()):.4f}  mag {float(loss_mag.detach()):.4f} "
-                    f"band {float(loss_band.detach()):.4f}  fm {float(loss_fm.detach()):.4f}"
+                    f"band {float(loss_band.detach()):.4f}  fm {float(loss_fm.detach()):.4f} "
+                    f"over {float(loss_over.detach()):.4f}  idem {float(loss_idem.detach()):.5f}"
                 )
             step += 1
             if step % cfg.get("save_every", 500) == 0:

@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset
 
-from ..grammar import spec_from_score
+from ..grammar import Spec, SpecEvent, spec_from_score
 from ..model.spec_tokenizer import SpecTokenizer
 from ..score import Score
 
@@ -24,8 +24,12 @@ class SpecDataset(Dataset):
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
         row = self.rows[index]
-        score = Score.from_dict(row["score"])
-        spec = spec_from_score(score)
+        if "spec" in row:  # free-text rows carry the target Spec itself
+            d = row["spec"]
+            evs = [SpecEvent(e["role"], e["t"], e["dur"], e["gain_db"], e["pan"], e["seed"]) for e in d["events"]]
+            spec = Spec(d["duration"], d["texture"], d["mood"], evs, d.get("bed_db"))
+        else:
+            spec = spec_from_score(Score.from_dict(row["score"]))
         pair = self.tokenizer.encode_pair(row["caption"], spec, max_len=self.max_len)
         return {
             "input_ids": torch.tensor(pair.input_ids, dtype=torch.long),

@@ -1,7 +1,10 @@
+import pytest
+
+pytest.importorskip("torch")  # these tests need the torch install (pip install -e ".[train]")
+
 import json
 
 import numpy as np
-import torch
 
 from orb.data.pair_dataset import PairDataset, collate_pairs
 from orb.data.score_dataset import ScoreDataset, collate_scores

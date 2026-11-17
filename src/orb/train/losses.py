@@ -161,3 +161,49 @@ def g_adv_loss(disc, fake: torch.Tensor) -> torch.Tensor:
     for f in logits:
         loss = loss + F.binary_cross_entropy_with_logits(f, torch.ones_like(f))
     return loss / len(logits)
+
+
+def _smooth_mag(z: torch.Tensor, kernel: tuple[int, int] = (3, 3)) -> torch.Tensor:
+    """(B, 2, F, T) real/imag -> (B, F, T) magnitude, box-smoothed so the loss
+    compares local energy instead of single noisy bins."""
+    mag = torch.sqrt(z[:, 0] ** 2 + z[:, 1] ** 2 + 1e-12)[:, None]
+    kf, kt = kernel
+    mag = F.avg_pool2d(mag, (kf, kt), stride=1, padding=(kf // 2, kt // 2), count_include_pad=False)
+    return mag[:, 0]
+
+
+def overshoot_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    floor_db: float = -60.0,
+    quiet_db: float = -30.0,
+    quiet_boost: float = 4.0,
+    margin_db: float = 1.0,
+) -> torch.Tensor:
+    """One-sided log-magnitude penalty for output louder than the target.
+
+    The symmetric band loss is happy to trade a quiet bin that is too loud
+    against one that is too quiet. This term only fires when the (locally
+    smoothed) output exceeds the target by more than ``margin_db``, and is
+    ``quiet_boost`` times stronger in bins that are at least ``quiet_db``
+    below the clip's peak, where any added energy is audible as hiss.
+    """
+    p = _smooth_mag(pred)
+    t = _smooth_mag(target)
+    ref = t.amax(dim=(1, 2), keepdim=True)
+    floor = ref * (10.0 ** (floor_db / 20.0))
+    p_db = 20.0 * torch.log10(p + floor)
+    t_db = 20.0 * torch.log10(t + floor)
+    excess = F.relu(p_db - t_db - margin_db)
+    quiet = (t < ref * (10.0 ** (quiet_db / 20.0))).to(excess.dtype)
+    weight = 1.0 + (quiet_boost - 1.0) * quiet
+    return (excess * weight).mean() / 20.0
+
+
+def residual_idempotence_loss(residual: torch.Tensor, clean: torch.Tensor) -> torch.Tensor:
+    """Energy of the residual the model adds to an already-clean, full-band
+    input, relative to that input's energy. A good detail stage leaves a good
+    render alone; v5 painted a 10-13 kHz comb onto exactly those inputs."""
+    r = residual[:, 0] ** 2 + residual[:, 1] ** 2
+    c = clean[:, 0] ** 2 + clean[:, 1] ** 2
+    return r.mean(dim=(1, 2)).div(c.mean(dim=(1, 2)) + 1e-8).mean()

@@ -22,6 +22,46 @@ EVENT_ROLES = (
     "sub_drop",
     "glitch",
     "noise_sweep",
+    # Natural and foley roles (v0.2). Appended, never inserted: a role's index
+    # seeds its noise, so the original ten keep rendering bit-identically.
+    "thunder",
+    "door_slam",
+    "knock",
+    "footsteps",
+    "water_drop",
+    "explosion",
+    # Everyday, nature and action roles (v0.3), appended for the same reason.
+    "bird_chirp",
+    "crickets",
+    "wave_crash",
+    "wind_gust",
+    "splash",
+    "frog",
+    "owl",
+    "glass_break",
+    "clock_tick",
+    "phone_ring",
+    "keyboard_typing",
+    "mouse_click",
+    "camera_shutter",
+    "paper_rustle",
+    "cork_pop",
+    "coin_drop",
+    "metal_clang",
+    "wood_creak",
+    "heartbeat",
+    "applause",
+    "pouring_water",
+    "can_opening",
+    "clock_alarm",
+    "punch",
+    "sword_clash",
+    "gunshot",
+    "car_horn",
+    "siren",
+    "engine",
+    "church_bell",
+    "fireworks",
 )
 INSTRUMENTS = ("pad", "pluck", "bass", "bell", "perc", "strings")
 TEXTURES = (
@@ -33,7 +73,14 @@ TEXTURES = (
     "rain",
     "fire",
     "sci_fi",
+    # Scenes built from event models (v0.3, `render/ambience.py`), appended.
+    "ocean",
+    "stream",
+    "forest",
+    "night",
+    "traffic",
 )
+AMBIENCE_TEXTURES = ("ocean", "stream", "forest", "night", "traffic")
 SECTION_ROLES = ("intro", "build", "peak", "break", "outro")
 SAMPLE_RATES = (16000, 22050, 24000, 32000, 44100, 48000)
 

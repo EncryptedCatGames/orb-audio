@@ -1,0 +1,26 @@
+{
+  "data": "data/planner_v8_train.jsonl",
+  "val_data": "data/heldout_v8.jsonl",
+  "out": "runs/planner_v8",
+  "seed": 0,
+  "max_len": 1024,
+  "batch_size": 32,
+  "epochs": 8,
+  "max_steps": 40000,
+  "lr": 0.0002,
+  "warmup": 300,
+  "weight_decay": 0.1,
+  "workers": 8,
+  "log_every": 20,
+  "eval_every": 500,
+  "eval_batches": 50,
+  "save_every": 2000,
+  "model": {
+    "d": 256,
+    "layers": 6,
+    "heads": 4,
+    "ctx": 1024,
+    "dropout": 0.1
+  },
+  "init_from": "weights/planner_v7.pt"
+}

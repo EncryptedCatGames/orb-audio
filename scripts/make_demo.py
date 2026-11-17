@@ -15,14 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from orb.eval.audit import audit_waveform, passes  # noqa: E402
-from orb.grammar import Spec, SpecEvent, caption, score_from_spec, spec_from_score  # noqa: E402
+from orb.grammar import Spec, SpecEvent, caption, score_from_spec  # noqa: E402
 from orb.io import write_wav  # noqa: E402
 from orb.model.detail import DetailUNet  # noqa: E402
 from orb.model.planner import Planner  # noqa: E402
 from orb.model.spec_tokenizer import SpecGrammar, SpecTokenizer  # noqa: E402
-from orb.render.detail import apply_detail  # noqa: E402
-from orb.render.mix import render  # noqa: E402
-from orb.score import Score  # noqa: E402
+from orb.render.mix import apply_detail_routed, render_stems  # noqa: E402
 from orb.train.common import get_device  # noqa: E402
 
 # name, duration, texture, mood, events (role, t, dur, gain_db, pan, seed)
@@ -143,8 +141,9 @@ def main() -> None:
         score.seed = zlib_crc(text)
         score.validate()
 
-        dsp = render(score)
-        audio = apply_detail(dsp, detail, seed=score.seed, strength=args.strength) if detail else dsp
+        stems = render_stems(score)
+        dsp = stems["mix"]
+        audio = apply_detail_routed(stems, detail, seed=score.seed, strength=args.strength) if detail else dsp
         if not np.isfinite(audio).all():
             raise SystemExit(f"non-finite output for {name}")
         write_wav(out_dir / f"{name}.wav", audio, score.sample_rate)
@@ -178,9 +177,9 @@ def main() -> None:
             text = caption(score_from_spec(spec))
             score = score_from_spec(plan(tok, planner, text, device), with_music=False)
             score.seed = zlib_crc(text)
-            dsp = render(score)
+            stems = render_stems(score)
             for s in (0.0, 0.35, 0.7, 1.0):
-                audio = apply_detail(dsp, detail, seed=score.seed, strength=s)
+                audio = apply_detail_routed(stems, detail, seed=score.seed, strength=s)
                 write_wav(out_dir / f"{name}_strength{s:.2f}.wav", audio, score.sample_rate)
 
     summary = {

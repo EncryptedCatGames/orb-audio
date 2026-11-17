@@ -4,12 +4,12 @@ Everything below runs on one 24 GB GPU. The current box is a **Runpod RTX 4090 S
 
 ## 1. Box
 
-The shipped planner is 5.08M and the detail model is 10.27M, so a 24 GB card is comfortable. Everything here was trained on a single RTX 4090.
+The shipped planner (v8) is 5.10M and the detail model is 9.06M, so a 24 GB card is comfortable. The early runs here were on a single RTX 4090; detail v6 and planners v6–v8 were trained on one NVIDIA H100 80GB (RunPod): detail v6 in about 2 minutes, planner v8 in about 35 (see RESULTS.md).
 
 | stage | VRAM at batch 4–8 | fits 20 GB |
 |---|---|---|
-| planner 5.08M, seq 1024 | 4–8 GB | yes |
-| detail 10.27M, 2×513×256 | 8–12 GB | yes |
+| planner 5.10M, seq 1024 | 4–8 GB | yes |
+| detail 9.06M, 2×513×256 | 8–12 GB | yes |
 | reward 5M (not used in v1) | <4 GB | yes |
 | DPO 41M (not used in v1) | 12–16 GB | yes |
 
@@ -165,7 +165,7 @@ Smoke:
   --prompt '12.00-second tense cue, sci fi bed, with whoosh @2.00 0.80s -8dB C #a3, impact @3.20 0.70s -6dB C #1f'
 ```
 
-The planner is a parser over a deterministic grammar. It is not a language model, and free-form captions outside the grammar are out of distribution. The structured Spec API is the reliable path for agents.
+The planner is a parser over a deterministic grammar. Since v8 it also reads plain words, but only into its 47 roles and 13 textures and on a best-effort basis (see RESULTS.md); it is not a general language model. The structured Spec API is the reliable path for agents.
 
 ### Detail degradation harness (go/no-go)
 
@@ -184,6 +184,21 @@ The planner is a parser over a deterministic grammar. It is not a language model
 - **Gate:** held-out MR-STFT at least 25% below identity, onset F1 ≥ 0.95, high-band ratio > 1.0.
 - **Transfer gate:** repeat with 10 classes held out entirely. If the gain only survives in-class, the model is memorizing timbre.
 - **Result (2026-11-16): no-go.** Best regression run: **16.1%** MR-STFT improvement, onset F1 **0.740**, high-band ratio **0.172**. The relative-loss variant: **2.2%**, **0.737**, **0.013**. The degradation destroys the high-frequency information; a regression model either hallucinates energy or collapses to the conditional mean. Do not collect the 20k CC0 set until the objective changes to a generative one (noise input, adversarial or flow matching).
+
+### Detail v6 (released)
+
+The released `weights/detail.pt` is detail v6: step 1250 of a 1500-step run of `configs/detail_v6.json` on the same ESC-50 degradation pairs (folds 1–4 train = 1599 pairs, fold 5 eval = 400 pairs), batch 8, on one NVIDIA H100 80GB (RunPod) in about 2 minutes.
+
+```bash
+/workspace/venv/bin/python scripts/build_degrade_pairs.py --esc50 /workspace/data/ESC-50-master
+/workspace/venv/bin/python scripts/train_detail.py --config configs/detail_v6.json
+/workspace/venv/bin/python scripts/eval_detail_artifacts.py --checkpoint runs/detail_v6/step1250.pt \
+  --json-out runs/detail_v6/gate.json --png-dir runs/detail_v6/gate_png
+```
+
+- 9.06M params. Bilinear resize-conv upsampling (v5's `ConvTranspose2d` left checkerboard tonal stripes around 10–13 kHz plus a ~4 kHz line), mask residual with a smoothed mask (kernel 9×3), residual tapered off between 8 and 9.5 kHz, quiet-frame gate (30 dB, 10 dB ramp), energy gate, no noise channel.
+- `adv_weight: 0`. Losses: band-energy 2.0, reconstruction 0.05, envelope 0.2, overshoot 1.0, idempotence 5.0.
+- Run the no-noise gate on every saved checkpoint (250..1500); all passed, and step 1250 had the best MR-STFT gain and the lowest periodicity and quiet-rise. Ship only a checkpoint that passes. Results are in [`RESULTS.md`](../RESULTS.md).
 
 ### Reward model
 

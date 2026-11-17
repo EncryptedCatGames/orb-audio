@@ -87,7 +87,16 @@ TCHAR_VAL = 344
 
 VAL_BASE = 352
 VAL_BINS = 4096
-VOCAB_SIZE = VAL_BASE + VAL_BINS
+# ROLE_VAL has room for the first 10 roles only (INST_VAL follows). The
+# natural/foley roles added in v0.2 take an extension range after the value
+# bins, so every existing token id keeps its meaning.
+ROLE_BASE_SLOTS = 10
+ROLE_EXT = VAL_BASE + VAL_BINS
+# Same for textures: TCHAR_VAL has 8 slots; the scene beds added in v0.3
+# (ocean, stream, forest, night, traffic) follow the role extension.
+TCHAR_BASE_SLOTS = 8
+TCHAR_EXT = ROLE_EXT + max(0, len(EVENT_ROLES) - ROLE_BASE_SLOTS)
+VOCAB_SIZE = TCHAR_EXT + max(0, len(TEXTURE_NAMES) - TCHAR_BASE_SLOTS)
 
 KEYS = "ABCDEFG"
 MODES = ("major", "minor")
@@ -95,6 +104,22 @@ METERS = ((4, 4), (3, 4), (6, 8), (5, 4))
 SAMPLE_RATES = (16000, 22050, 24000, 32000, 44100, 48000)
 
 ROLE_TO_ID = {r: i for i, r in enumerate(EVENT_ROLES)}
+
+
+def role_token(role: str) -> int:
+    i = ROLE_TO_ID[role]
+    return ROLE_VAL + i if i < ROLE_BASE_SLOTS else ROLE_EXT + i - ROLE_BASE_SLOTS
+
+
+def role_tokens() -> set[int]:
+    return {role_token(r) for r in EVENT_ROLES}
+
+
+def role_from_token(tok: int) -> str:
+    for r in EVENT_ROLES:
+        if role_token(r) == tok:
+            return r
+    raise ValueError(f"bad role token {tok}")
 INST_TO_ID = {r: i for i, r in enumerate(INSTRUMENTS)}
 KEY_TO_ID = {r: i for i, r in enumerate(KEYS)}
 MODE_TO_ID = {r: i for i, r in enumerate(MODES)}
@@ -102,6 +127,22 @@ METER_TO_ID = {r: i for i, r in enumerate(METERS)}
 SR_TO_ID = {r: i for i, r in enumerate(SAMPLE_RATES)}
 SECROLE_TO_ID = {r: i for i, r in enumerate(SECTION_ROLES)}
 TCHAR_TO_ID = {r: i for i, r in enumerate(TEXTURE_NAMES)}
+
+
+def tchar_token(character: str) -> int:
+    i = TCHAR_TO_ID[character]
+    return TCHAR_VAL + i if i < TCHAR_BASE_SLOTS else TCHAR_EXT + i - TCHAR_BASE_SLOTS
+
+
+def tchar_tokens() -> set[int]:
+    return {tchar_token(c) for c in TEXTURE_NAMES}
+
+
+def tchar_from_token(tok: int) -> str:
+    for c in TEXTURE_NAMES:
+        if tchar_token(c) == tok:
+            return c
+    raise ValueError(f"bad texture token {tok}")
 
 # -- quantization -----------------------------------------------------------
 
@@ -243,7 +284,7 @@ class ScoreTokenizer:
                 D,
                 _val(_q_dur(tx.dur)),
                 TCHAR,
-                TCHAR_VAL + TCHAR_TO_ID[tx.character],
+                tchar_token(tx.character),
                 GAIN,
                 _val(_q(tx.gain_db, -60, 6)),
                 WIDTH,
@@ -257,7 +298,7 @@ class ScoreTokenizer:
                 T,
                 _val(_q_time(ev.t)),
                 ROLE,
-                ROLE_VAL + ROLE_TO_ID[ev.role],
+                role_token(ev.role),
                 CHAR,
             ]
             out += _bytes(ev.character)
@@ -390,7 +431,7 @@ class ScoreTokenizer:
             take(D)
             dur = dur_value()
             take(TCHAR)
-            char = categorical(TCHAR_VAL, TCHAR_TO_ID)
+            char = tchar_from_token(take())
             take(GAIN)
             gain = value(-60, 6)
             take(WIDTH)
@@ -408,7 +449,7 @@ class ScoreTokenizer:
             take(T)
             t = time_value()
             take(ROLE)
-            role = categorical(ROLE_VAL, ROLE_TO_ID)
+            role = role_from_token(take())
             take(CHAR)
             chars: list[int] = []
             while p < len(toks) and toks[p] != END_CHAR:

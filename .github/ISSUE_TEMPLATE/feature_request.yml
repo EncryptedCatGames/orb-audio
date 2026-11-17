@@ -1,0 +1,16 @@
+name: Feature or sound request
+description: A new role, texture, agent tool, or API
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you are trying to make
+      description: The cue, workflow, or agent task. Links to reference sounds are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: New role/texture, Spec field, MCP tool, API change...

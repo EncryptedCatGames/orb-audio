@@ -1,7 +1,7 @@
 [project]
-name = "orb"
+name = "orb-audio"
 version = "0.1.0"
-description = "A tiny, from-scratch audio engine for agents: caption -> Spec -> DSP -> 48 kHz audio"
+description = "A tiny, from-scratch audio engine for agents: caption -> typed Spec -> DSP -> 48 kHz stereo audio"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -13,10 +13,15 @@ keywords = [
   "procedural-audio",
   "dsp",
   "agents",
+  "mcp",
+  "sound-design",
+  "generative-audio",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
@@ -24,23 +29,36 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: Multimedia :: Sound/Audio",
   "Topic :: Multimedia :: Sound/Audio :: Sound Synthesis",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
+# Planner inference and training. The DSP path needs only numpy.
 train = ["torch>=2.4", "safetensors>=0.4"]
+# Alias of `train` for inference-only installs.
+torch = ["torch>=2.4", "safetensors>=0.4"]
+# Model Context Protocol server for agents (`orb-mcp`).
+mcp = ["mcp>=1.2"]
+# Download the planner from the Hugging Face Hub.
+hub = ["huggingface_hub>=0.24"]
 dev = ["pytest>=8"]
+all = ["orb-audio[train,mcp,hub,dev]"]
 
 [project.scripts]
 orb-generate = "orb.cli:main"
+orb-mcp = "orb.mcp_server:main"
 
 [project.urls]
-Homepage = "https://marcosmaceo.com"
+Homepage = "https://stdevmac.github.io/orb-audio/"
+Documentation = "https://github.com/stdevMac/orb-audio/tree/main/docs"
 Repository = "https://github.com/stdevMac/orb-audio"
 Issues = "https://github.com/stdevMac/orb-audio/issues"
-Contact = "https://marcosmaceo.com"
+Changelog = "https://github.com/stdevMac/orb-audio/blob/main/CHANGELOG.md"
 Model = "https://huggingface.co/marcosmaceo/orb-planner"
 Dataset = "https://huggingface.co/datasets/marcosmaceo/orb-scores-100k"
+Demo = "https://huggingface.co/spaces/marcosmaceo/orb"
+Author = "https://marcosmaceo.com"
 
 [build-system]
 requires = ["hatchling"]
@@ -48,6 +66,23 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/orb"]
+
+# Keep the sdist small: code, tests and docs only. Weights live on the Hub
+# (and in Git LFS); the web demo, site and training configs stay in the repo.
+[tool.hatch.build.targets.sdist]
+# Anchored with "/" so nothing nested (e.g. video/node_modules) is picked up.
+include = [
+  "/src/orb",
+  "/tests",
+  "/examples",
+  "/README.md",
+  "/CHANGELOG.md",
+  "/MODEL_CARD.md",
+  "/LICENSE",
+  "/NOTICE",
+  "/CITATION.cff",
+  "/pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

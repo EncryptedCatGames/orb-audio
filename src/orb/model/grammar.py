@@ -46,7 +46,7 @@ from .tokenizer import (
     NOTE,
     PAN,
     ROLE,
-    ROLE_VAL,
+    role_tokens,
     SCORE,
     SEC,
     SECROLE_VAL,
@@ -55,7 +55,7 @@ from .tokenizer import (
     SR_VAL,
     T,
     TCHAR,
-    TCHAR_VAL,
+    tchar_tokens,
     TEMPO,
     TEX,
     TEXTURES,
@@ -197,7 +197,7 @@ class GrammarMask:
         if s == "TEX_CHAR":
             return {TCHAR}
         if s == "TEX_CHAR_VAL":
-            return set(range(TCHAR_VAL, TCHAR_VAL + 8))
+            return tchar_tokens()
         if s == "TEX_GAIN":
             return {GAIN}
         if s == "TEX_GAIN_VAL":
@@ -219,7 +219,7 @@ class GrammarMask:
         if s == "EVT_ROLE":
             return {ROLE}
         if s == "EVT_ROLE_VAL":
-            return set(range(ROLE_VAL, ROLE_VAL + 10))
+            return role_tokens()
         if s == "EVT_CHAR_FIELD":
             return {CHAR}
         if s == "EVT_CHAR":

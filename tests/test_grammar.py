@@ -1,5 +1,7 @@
 import pytest
 
+pytest.importorskip("torch")  # these tests need the torch install (pip install -e ".[train]")
+
 from orb.model.grammar import GrammarMask
 from orb.model.tokenizer import END_EVENTS, EVT, SCORE, ScoreTokenizer
 from orb.score import Score

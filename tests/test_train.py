@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("torch")  # these tests need the torch install (pip install -e ".[train]")
+
 import torch
 import torch.nn.functional as F
 
@@ -37,3 +41,27 @@ def test_evaluate_uses_next_token_targets():
         ignore_index=-100,
     )
     assert abs(got - float(expected)) < 1e-5
+
+
+def test_overshoot_loss_is_one_sided():
+    from orb.train.losses import overshoot_loss
+
+    torch.manual_seed(0)
+    y = torch.randn(2, 2, 64, 32)
+    assert float(overshoot_loss(y, y)) == 0.0
+    assert float(overshoot_loss(0.5 * y, y)) == 0.0  # too quiet is not penalised here
+    assert float(overshoot_loss(2.0 * y, y)) > 0.0
+    # Energy painted into a silent region costs more than the same excess on signal.
+    quiet = y.clone()
+    quiet[:, :, 32:] *= 1e-3
+    noisy = quiet.clone()
+    noisy[:, :, 32:] += 0.1 * torch.randn_like(noisy[:, :, 32:])
+    assert float(overshoot_loss(noisy, quiet)) > float(overshoot_loss(2.0 * y, y))
+
+
+def test_residual_idempotence_loss():
+    from orb.train.losses import residual_idempotence_loss
+
+    x = torch.randn(2, 2, 16, 8)
+    assert float(residual_idempotence_loss(torch.zeros_like(x), x)) == 0.0
+    assert abs(float(residual_idempotence_loss(0.1 * x, x)) - 0.01) < 1e-4

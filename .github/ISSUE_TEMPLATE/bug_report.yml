@@ -1,0 +1,31 @@
+name: Bug report
+description: A wrong Spec, a bad render, a crash, or broken docs
+labels: [bug]
+body:
+  - type: textarea
+    id: input
+    attributes:
+      label: Caption or Spec
+      description: The exact caption or Spec JSON you used.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: For audio problems, say which cue and what you heard (click, hiss, wrong timing...).
+    validations:
+      required: true
+  - type: textarea
+    id: audit
+    attributes:
+      label: Audit output / traceback
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "orb-audio 0.1.0, Python 3.12, torch 2.5 (or none), macOS 15"
+    validations:
+      required: true

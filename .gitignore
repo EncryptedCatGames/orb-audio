@@ -11,13 +11,21 @@ __pycache__/
 
 # Generated output
 /out/
+/orb_out/
 /runs/
 /web/out/
 /web/examples.json
 /eval/runs/
 
 # Data and training artifacts (large, reproducible from scripts)
-/data/
+/data/*
+# Small eval sets ship so the numbers in RESULTS.md can be reproduced
+!/data/freetext_eval.jsonl
+!/data/freetext_blind.jsonl
+!/data/freetext_val.jsonl
+!/data/heldout_v7.jsonl
+!/data/heldout_v7_2k.jsonl
+!/data/heldout_v8.jsonl
 /artifacts/
 /artifacts_test/
 
@@ -28,6 +36,20 @@ __pycache__/
 # Fetch them separately; see weights/README.md.
 /weights/detail.pt
 /weights/detail.safetensors
+/weights/detail_*.pt
+/weights/detail_*.safetensors
+
+# JS tooling (video/ uses Remotion)
+node_modules/
+
+# Agent / browser-automation scratch
+.grok-media/
+.playwright-mcp/
+.claude/settings.local.json
+
+# Release scratch
+/dist/
+/build/
 
 # OS / editor
 .DS_Store
@@ -35,3 +57,9 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Launch film (Remotion project + its audio tooling) is kept out of the repo
+/video/
+/scripts/build_video_audio.py
+/scripts/build_video_vo.py
+/scripts/video_score.py

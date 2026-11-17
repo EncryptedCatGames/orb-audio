@@ -71,6 +71,11 @@ def detail_channel(
         cond = torch.zeros(1, model.cond_dim, device=device)
     cond = cond.to(device).reshape(1, -1)
 
+    # The quiet gate needs the cue's active level, not the chunk's: a chunk of
+    # pure background must still count as quiet.
+    frame_power = torch.mean(torch.abs(spec) ** 2, dim=0)
+    active_power = torch.quantile(frame_power.float().cpu(), 0.99).to(device)
+
     acc = torch.zeros_like(spec)
     weight = torch.zeros(t, device=device)
     with torch.no_grad():
@@ -95,7 +100,10 @@ def detail_channel(
                     device=device,
                     generator=gen,
                 )
-            residual = model(inp, cond, noise)[0]
+            frame_ref = None
+            if getattr(model, "quiet_gate_db", 0.0) > 0:
+                frame_ref = (active_power / scale**2).reshape(1)
+            residual = model(inp, cond, noise, frame_ref=frame_ref)[0]
             # No DC: a constant offset would leak into silent frames.
             residual[0, 0] = 0.0
             residual = (residual[0] + 1j * residual[1]) * scale

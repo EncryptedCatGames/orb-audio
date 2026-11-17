@@ -110,6 +110,65 @@ def lowpass(x: np.ndarray, sr: int, cutoff: float, order: int = 4) -> np.ndarray
     return np.fft.irfft(X, n)
 
 
+def bandlimit(
+    x: np.ndarray,
+    sr: int,
+    lo: float | None = None,
+    hi: float | None = None,
+    order: int = 4,
+    pad: int = 2048,
+) -> np.ndarray:
+    """Zero-phase band limit with Butterworth-shaped magnitude.
+
+    `lo` is the high-pass corner and `hi` the low-pass corner, either may be
+    None. The signal is zero-padded on both sides before the FFT so the
+    filter's ringing cannot wrap around onto the far end of the clip, then
+    cropped back, so the output has the same length and alignment as `x`.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    n = len(x)
+    if n == 0 or (lo is None and hi is None):
+        return x
+    m = n + 2 * pad
+    X = np.fft.rfft(np.pad(x, (pad, pad)), m)
+    f = np.fft.rfftfreq(m, 1.0 / sr)
+    mag = np.ones_like(f)
+    if hi is not None:
+        mag /= np.sqrt(1.0 + (f / max(hi, 1.0)) ** (2 * order))
+    if lo is not None:
+        fr = np.maximum(f, 1e-9) / max(lo, 1.0)
+        mag /= np.sqrt(1.0 + fr ** (-2 * order))
+    return np.fft.irfft(X * mag, m)[pad : pad + n]
+
+
+def shaped_burst(
+    rng: np.random.Generator,
+    n: int,
+    k: int,
+    decay: float,
+    sr: int,
+    lo: float = 2000.0,
+    hi: float = 12000.0,
+) -> np.ndarray:
+    """An exponentially decaying noise burst, band-limited to [lo, hi].
+
+    Raw white noise puts half its energy above 12 kHz, which is what made the
+    attack transients spray to Nyquist. The burst keeps the energy of the raw
+    burst, so the snap is as loud as before, just not as fizzy. It draws
+    exactly `k` normals from `rng`, like the raw burst it replaces, so every
+    later draw (and so every other part of the event) is unchanged.
+    """
+    out = np.zeros(n)
+    k = min(n, max(1, k))
+    raw = rng.standard_normal(k) * np.exp(-np.linspace(0.0, decay, k))
+    out[:k] = raw
+    y = bandlimit(out, sr, lo, hi)
+    e_y = float(np.sum(y**2))
+    if e_y > 1e-24:
+        y *= np.sqrt(float(np.sum(raw**2)) / e_y)
+    return y
+
+
 # -- sources ----------------------------------------------------------------
 
 
@@ -175,17 +234,43 @@ def align_peak(x: np.ndarray, sr: int, target_s: float, max_shift: float = 0.05)
     return np.pad(x, (0, -shift))[-shift:]
 
 
-def reverb(x: np.ndarray, sr: int, decay: float = 0.6, wet: float = 0.2, seed: int = 0) -> np.ndarray:
-    """Convolution with a decaying-noise impulse response. Cheap and stable."""
+def reverb(
+    x: np.ndarray,
+    sr: int,
+    decay: float = 0.6,
+    wet: float = 0.2,
+    seed: int = 0,
+    tail: bool = False,
+) -> np.ndarray:
+    """Convolution with a decaying, darkened noise impulse response.
+
+    The IR is noise with frequency-dependent decay: the band above 3 kHz dies
+    in 40% of `decay` (air absorption), and the whole IR is band-limited to
+    80 Hz - 7 kHz. The white-noise IR this replaced had 67% of its energy
+    above 8 kHz, which put a flat hiss on every tail; this one has ~1%.
+
+    With `tail=True` the output is `len(x) + len(ir) - 1` samples long, so the
+    tail decays naturally instead of being cut at the end of the dry clip.
+    """
     if wet <= 0 or len(x) == 0:
         return x
     rng = np.random.default_rng(seed)
     n_ir = max(8, int(decay * 2.5 * sr))
     t = np.arange(n_ir) / sr
-    ir = rng.standard_normal(n_ir) * np.exp(-LN1000 * t / max(decay, 1e-3))
-    ir[: max(1, int(0.01 * sr))] *= np.linspace(0.0, 1.0, max(1, int(0.01 * sr)))
+    d = max(decay, 1e-3)
+    # Band-limit the stationary noise first, then apply the decays, so filter
+    # ringing cannot wrap onto the end of the tail.
+    noise = bandlimit(rng.standard_normal(n_ir), sr, 80.0, 7000.0, order=4)
+    low = bandlimit(noise, sr, None, 3000.0, order=2)
+    high = noise - low
+    ir = low * np.exp(-LN1000 * t / d) + 0.5 * high * np.exp(-LN1000 * t / (0.4 * d))
+    ramp = max(1, int(0.01 * sr))
+    ir[:ramp] *= np.linspace(0.0, 1.0, ramp)
     ir /= np.sqrt(np.sum(ir**2)) + 1e-9
     n = len(x) + n_ir - 1
     nfft = 1 << (n - 1).bit_length()
-    wet_sig = np.fft.irfft(np.fft.rfft(x, nfft) * np.fft.rfft(ir, nfft), nfft)[: len(x)]
-    return (1.0 - wet) * x + wet * wet_sig
+    wet_sig = np.fft.irfft(np.fft.rfft(x, nfft) * np.fft.rfft(ir, nfft), nfft)
+    if tail:
+        dry = np.pad(np.asarray(x, dtype=np.float64), (0, n - len(x)))
+        return (1.0 - wet) * dry + wet * wet_sig[:n]
+    return (1.0 - wet) * x + wet * wet_sig[: len(x)]

@@ -21,8 +21,7 @@ from orb.grammar import score_from_spec, spec_from_score  # noqa: E402
 from orb.model.detail import DetailUNet  # noqa: E402
 from orb.model.planner import Planner  # noqa: E402
 from orb.model.spec_tokenizer import SpecGrammar, SpecTokenizer  # noqa: E402
-from orb.render.detail import apply_detail  # noqa: E402
-from orb.render.mix import render_stems  # noqa: E402
+from orb.render.mix import apply_detail_routed, render_stems  # noqa: E402
 from orb.score import Score  # noqa: E402
 from orb.train.common import get_device  # noqa: E402
 
@@ -93,7 +92,7 @@ def main() -> None:
         stems = render_stems(score)
         dsp = stems["mix"]
         det = (
-            apply_detail(dsp, detail, seed=score.seed, strength=args.detail_strength)
+            apply_detail_routed(stems, detail, seed=score.seed, strength=args.detail_strength)
             if detail is not None
             else dsp
         )

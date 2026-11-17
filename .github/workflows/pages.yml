@@ -1,0 +1,65 @@
+name: pages
+
+# Deploys site/ (the ORB showcase) to GitHub Pages.
+# The gallery audio and cues.json are committed (built locally with
+# `python scripts/build_site.py`, which needs numpy, ffmpeg and optionally
+# torch). CI only refreshes site/py/orb.zip from src/orb with the stdlib, so
+# the in-browser renderer always matches the code on main.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "src/orb/**"
+      - "scripts/build_site.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bundle the numpy-only renderer for Pyodide
+        run: python scripts/build_site.py --py-only
+
+      - name: Check the site is complete
+        run: |
+          test -f site/index.html
+          test -f site/assets/cues.json
+          test -f site/py/orb.zip
+          touch site/.nojekyll
+          du -sh site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

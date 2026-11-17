@@ -1,128 +1,115 @@
-# Release checklist
+# Release checklist — ORB v0.1.0
 
-Everything is prepared locally. **Nothing has been pushed.** Work top to bottom;
-each step depends on the one above it.
+Everything is prepared locally, and **nothing has been pushed**. Two scripts do the
+mechanical work:
 
-> `hf/` is gitignored in the main repo: it is a staging area where each
-> subfolder becomes its own repository. Do not `git clean -fdx` before pushing
-> it, and do not `git add hf/` from the main repo.
+| Script | What it does | Changes anything? |
+|---|---|---|
+| `scripts/release_check.sh` | every local preflight check; exits non-zero on failure | no |
+| `scripts/release_publish.sh` | GitHub repo + Pages + tag + Release, then the four Hugging Face repos | **only with `--yes`**; dry run by default |
 
-## 0. Fill in the placeholders
+Identities: GitHub **`stdevMac/orb-audio`**, Hugging Face **`marcosmaceo`**, PyPI
+distribution **`orb-audio`** (`orb` is taken on PyPI; the import name is still `orb`).
+Pages URL: <https://stdevmac.github.io/orb-audio/>.
 
-Author fields are already set to Marcos Maceo. Two placeholders remain:
+> `hf/` is gitignored in the main repo. It is a staging area where each subfolder becomes
+> its own Hugging Face repository. Do not `git clean -fdx` before publishing, and do not
+> `git add hf/` from the main repo.
 
-```bash
-grep -rn "stdevMac\|marcosmaceo" \
-  --include="*.md" --include="*.toml" --include="*.cff" --include="*.json" --include="Dockerfile" .
-```
-
-| Placeholder | Replace with |
-|---|---|
-| `stdevMac` | GitHub org or user |
-| `marcosmaceo` | Hugging Face user or org |
-
-Also decide the PyPI distribution name. `pyproject.toml` currently uses `orb`;
-`orb-audio` is safer if `orb` is taken.
-
-## 1. Verify locally
+## 0. One-time tooling
 
 ```bash
-python -m pytest -q                       # 36 passed
-python examples/04_no_torch.py            # must not import torch
-python examples/01_generate.py
-python examples/02_edit_spec.py
-python examples/03_variants.py --n 3
-python web/server.py --port 8765          # open http://127.0.0.1:8765
-```
-
-Check `weights/planner.pt` matches `weights/manifest.json`:
-
-```bash
-shasum -a 256 weights/planner.pt
-```
-
-## 2. Push the GitHub repo
-
-```bash
-git init
+brew install gh git-lfs            # gh is already logged in as stdevMac
 git lfs install
-git add .
-git commit -m "ORB 0.1.0: from-scratch caption-to-audio engine"
-git branch -M main
-git remote add origin https://github.com/stdevMac/orb-audio.git
-git push -u origin main
-git tag -a v0.1.0 -m "ORB 0.1.0" && git push origin v0.1.0
+pip install -U "huggingface_hub[cli]"   # into the python you pass as PY (default .venv-torch)
+hf auth login                      # or: export HF_TOKEN=hf_...
 ```
 
-Confirm LFS is active (`git lfs ls-files` should list `weights/planner.pt`).
-Turn on branch protection and enable the `tests` workflow.
+## 1. Finish the pieces built in parallel
 
-## 3. Publish the planner model
+- [ ] **Demo video**: `site/assets/orb-demo.mp4` (< 25 MB) and the poster
+      `site/assets/orb-demo-poster.jpg`. The README embeds the poster and links the video.
+- [ ] **Project page**: `site/` plus `.github/workflows/pages.yml` (Actions deploy of `site/`).
+      Open `site/index.html` locally and check that audio plays.
+- [ ] **MCP server**: `src/orb/mcp_server.py` defines `main()`, documented in `docs/agents.md`.
+      Smoke test: `pip install -e ".[mcp,train]" && orb-mcp`, then connect a client
+      (for example `claude mcp add orb -- orb-mcp`) and render one cue.
+
+## 2. Preflight (must pass)
 
 ```bash
-pip install -U huggingface_hub
-huggingface-cli login
-
-cd hf/model-planner
-huggingface-cli repo create orb-planner --type model
-git init && git lfs install
-git remote add origin https://huggingface.co/marcosmaceo/orb-planner
-git add . && git commit -m "ORB planner 0.1.0"
-git push origin main
+scripts/release_check.sh          # or: make release-check
 ```
 
-Check the card renders and the license badge reads Apache-2.0.
+It checks:
 
-## 4. Publish the dataset
+- `pyproject.toml`: name `orb-audio`, the `train`/`mcp`/`dev` extras, and that the `orb-generate` and `orb-mcp` entry points resolve to real functions
+- version `0.1.0` agrees across pyproject, CITATION.cff, CHANGELOG, the Space `ORB_REF` and `docs/release-notes-v0.1.0.md`
+- Git LFS: rules for `*.pt` / `*.safetensors`, `weights/planner.pt` stored as an LFS object, no non-LFS file over 25 MB, `hf/` and the CC BY-NC detail weights untracked
+- `weights/planner.pt` SHA-256 and size match `weights/manifest.json`
+- `hf/model-planner/planner.safetensors` is tensor-identical to `planner.pt`, the config matches, and it decodes a caption exactly
+- the detail safetensors loads, and the dataset has 100,000 valid rows
+- the `hf/*/README.md` front-matter is valid Hub YAML (license, tags, pipeline_tag, library_name, datasets, language, configs, Space sdk/app_port)
+- the Space Dockerfile clones `v0.1.0`, downloads the planner and config from the Hub, exposes 7860 and runs as uid 1000
+- no placeholder markers, stale `orb[...]` install names or broken relative links in the README and docs
+- `pytest -q`, all examples, the `orb-generate` CLI, and the DSP path in a venv **without torch**
+
+`--fast` skips the tests and examples.
+
+## 3. Commit
 
 ```bash
-cd hf/dataset-scores
-huggingface-cli repo create orb-scores-100k --type dataset
-git init && git lfs install
-git remote add origin https://huggingface.co/datasets/marcosmaceo/orb-scores-100k
-git add . && git commit -m "ORB scores 100k"
-git push origin main
+git add -A && git status        # check that hf/, out/, data/ and artifacts/ are NOT listed
+git commit -m "Release 0.1.0"
 ```
 
-## 5. Publish the detail model (non-commercial)
+## 4. Rehearse, then publish
 
 ```bash
-cd hf/model-detail
-huggingface-cli repo create orb-detail --type model
-git init && git lfs install
-git remote add origin https://huggingface.co/marcosmaceo/orb-detail
-git add . && git commit -m "ORB detail 0.1.0 (CC BY-NC-4.0)"
-git push origin main
+scripts/release_publish.sh                          # dry run: prints every command, checks logins
+scripts/release_publish.sh --yes                    # publishes everything, in order
 ```
 
-The card must keep the non-commercial warning at the top.
+What `--yes` does, in order. Each step can be re-run alone with `--only <step>`:
 
-## 6. Publish the Space
+| Step | Action |
+|---|---|
+| `github` | `gh repo create stdevMac/orb-audio --public`, add `origin`, push `main` (LFS objects included), set topics |
+| `pages` | `gh api -X POST repos/stdevMac/orb-audio/pages -f build_type=workflow`, then trigger `pages.yml` |
+| `release` | tag `v0.1.0`, push it, then `gh release create` with the CHANGELOG section as notes; attaches `planner.safetensors`, its config and the demo MP4 |
+| `hf-planner` | create and upload `marcosmaceo/orb-planner` (Apache-2.0) |
+| `hf-dataset` | create and upload `datasets/marcosmaceo/orb-scores-100k` (Apache-2.0) |
+| `hf-detail` | create and upload `marcosmaceo/orb-detail` (**CC BY-NC-4.0**; skip it with `--skip-detail`) |
+| `hf-space` | create and upload `spaces/marcosmaceo/orb` (Docker). It refuses to run until the GitHub tag exists |
 
-```bash
-cd hf/space
-huggingface-cli repo create orb --type space --space_sdk docker
-git init && git lfs install
-git remote add origin https://huggingface.co/spaces/marcosmaceo/orb
-git add . && git commit -m "ORB demo"
-git push origin main
-```
+For the long-form GitHub Release body, use
+`--only release --notes-file docs/release-notes-v0.1.0.md`, or edit the release afterwards.
+`--private` publishes everything as private, which is useful for a full rehearsal.
 
-The Dockerfile clones the GitHub repo at `v0.1.0` and downloads the planner
-from the Hub, so steps 2 and 3 must be done first. Build takes a few minutes.
+The Space build clones `stdevMac/orb-audio@v0.1.0` and downloads the planner from the Hub,
+so `github`, `release` and `hf-planner` must be done before `hf-space` (the default order
+handles this). The first build takes about 5 minutes.
 
-## 7. After publishing
+## 5. After publishing
 
-- [ ] README links resolve (GitHub, HF model, HF dataset, Space)
-- [ ] `pip install "orb[train] @ git+https://github.com/stdevMac/orb-audio"` works in a clean venv
-- [ ] The Space loads and generates a cue
-- [ ] The detail model card shows CC BY-NC-4.0
-- [ ] `CITATION.cff` validates (`cffconvert --validate`)
-- [ ] Add the repo to the HF model card's `repository` field if desired
+- [ ] CI is green on `main` and on the tag (the README badge)
+- [ ] <https://stdevmac.github.io/orb-audio/> loads, the video plays, and the audio examples play
+- [ ] README badges and links resolve (GitHub, Pages, HF model, dataset and Space)
+- [ ] The poster image in the README renders and links to the Pages site
+- [ ] `pip install "orb-audio[train] @ git+https://github.com/stdevMac/orb-audio@v0.1.0"` works in a clean venv
+- [ ] `pip install "orb-audio[mcp,train] @ git+https://github.com/stdevMac/orb-audio@v0.1.0" && orb-mcp` starts
+- [ ] The Space builds, loads and generates a cue
+- [ ] The HF planner card shows Apache-2.0, `text-to-audio`, the dataset link and the eval result
+- [ ] The detail model card shows CC BY-NC-4.0 and opens with the non-commercial warning
+- [ ] The dataset viewer renders `scores_100k.jsonl.gz`
+- [ ] `CITATION.cff` validates (`pipx run cffconvert --validate`); GitHub shows "Cite this repository"
+- [ ] Turn on branch protection for `main` (require the `tests` checks)
+- [ ] Post the announcement (the short form is at the end of `docs/release-notes-v0.1.0.md`)
+- [ ] Optional: publish to PyPI as `orb-audio` (`python -m build && twine upload dist/*`). Weights are not in the sdist or wheel; the planner comes from LFS or the Hub.
 
 ## Not included on purpose
 
-- `artifacts/` (2.2 GB of training output) — reproducible from `scripts/`
-- `artifacts/degrade_audio/` (1.8 GB, ESC-50 derived, CC BY-NC)
-- `weights/detail.pt` (CC BY-NC, separate repo)
-- `web/out/` (generated cache)
+- `artifacts/` (2.2 GB of training output), which is reproducible from `scripts/`
+- `artifacts/degrade_audio/` (1.8 GB, derived from ESC-50, CC BY-NC)
+- `weights/detail.pt` (CC BY-NC, separate Hub repo)
+- `web/out/`, `out/` (generated cache)

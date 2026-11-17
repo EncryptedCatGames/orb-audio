@@ -72,7 +72,10 @@ def guess_role(duration: float, centroid: float, zcr: float) -> str:
 
 def cond_vector(role: str, duration: float, apex_frac: float) -> list[float]:
     v = [0.0] * 32
-    v[EVENT_ROLES.index(role)] = 1.0
+    # One-hot role: the 10 original roles in slots 0-9, the v0.2 natural and
+    # foley roles in slots 16-21 (10-15 hold the scalar features below).
+    i = EVENT_ROLES.index(role)
+    v[i if i < 10 else 16 + (i - 10)] = 1.0
     v[10] = min(duration / 3.0, 1.0)
     v[11] = apex_frac
     v[12] = 0.9
