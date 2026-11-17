@@ -119,7 +119,7 @@ PARAMS: dict[str, dict[str, float]] = {
     "car_horn": dict(width=0.2, reverb=0.18, reverb_decay=0.9),
     "siren": dict(width=0.3, reverb=0.22, reverb_decay=1.2),
     "engine": dict(width=0.3, reverb=0.08, reverb_decay=0.6),
-    "church_bell": dict(width=0.4, reverb=0.3, reverb_decay=2.0),
+    "church_bell": dict(width=0.4, reverb=0.4, reverb_decay=2.0),
     "fireworks": dict(width=0.7, reverb=0.25, reverb_decay=1.6),
 }
 
@@ -519,43 +519,149 @@ def _owl(ev, sr, rng, crng, p, seed):
 # =============================================================================
 
 
-def _shard(n, sr, at, rng, crng, bright=1.0):
-    """A small glass fragment ringing: 3-4 high inharmonic modes, short."""
-    f = crng.uniform(3500, 8000) * bright
-    freqs = f * np.array((1.0, crng.uniform(1.4, 1.7), crng.uniform(2.1, 2.6), crng.uniform(2.9, 3.4)))
-    t60 = crng.uniform(0.04, 0.25) * np.array((1.0, 0.7, 0.5, 0.35))
-    return _strike(n, sr, at, freqs, t60, (1.0, 0.6, 0.4, 0.25), rng, contact=0.0002, noise=0.5)
+def _bells_place(out, at, x, amp=1.0):
+    """Add `amp * x` into `out` from sample `at` on, clipped to `out`."""
+    n = len(out)
+    if at >= n or at < 0 or amp == 0:
+        return
+    k = min(len(x), n - at)
+    out[at : at + k] += amp * x[:k]
+
+
+def _bells_modes(freqs, t60s, gains, sr, length=None):
+    """The impulse response of a bank of damped sine modes, each computed only
+    for as long as it rings (to -66 dB)."""
+    t60s = np.maximum(np.asarray(t60s, dtype=float), 1e-3)
+    big = int(1.1 * t60s.max() * sr) + 1
+    m = big if length is None else min(length, big)
+    out = np.zeros(m)
+    for f, d, g in zip(freqs, t60s, gains):
+        if not 20.0 < f < 0.45 * sr or g == 0:
+            continue
+        k = min(m, int(1.1 * d * sr) + 1)
+        out[:k] += g * _bells_mode(f, d, sr, k)
+    return out
+
+
+def _bells_mode(f, t60, sr, k, block=2048):
+    """exp(-LN1000 t / t60) sin(2 pi f t) for k samples, cheaply: one block
+    of complex exponentials, then each later block is the first one times a
+    single complex factor (no per-sample exp or sin)."""
+    z = (-LN1000 / max(t60, 1e-3) + 1j * TAU * f) / sr
+    b = min(block, k)
+    base = np.exp(z * np.arange(b))
+    nb = -(-k // b)
+    steps = np.exp(z * b * np.arange(nb))
+    return (steps[:, None] * base[None, :]).ravel()[:k].imag
+
+
+def _bells_clicks(n, sr, times, amps, lo, rng):
+    """Contact clicks: an impulse high-passed at `lo` (zero phase), placed at
+    each of `times` (s) with `amps` and a random sign. The same as band
+    limiting a train of `_grains`, without a filter over the whole clip."""
+    h = 512
+    kern = np.zeros(2 * h)
+    kern[h] = 1.0
+    kern = bandlimit(kern, sr, lo, None, order=2, pad=h) * np.hanning(2 * h)
+    out = np.zeros(n + 2 * h)
+    signs = rng.choice((-1.0, 1.0), len(times))
+    for tm, a, sg in zip(times, amps, signs):
+        at = int(tm * sr)
+        if 0 <= at < n:
+            out[at : at + 2 * h] += a * sg * kern
+    return out[h : h + n]
+
+
+def _bells_doublets(freqs, t60s, crng, split):
+    """Every partial of a real (slightly asymmetric) round body is a pair of
+    modes a little apart: they beat. Returns the two halves separately so
+    the ears can hear different mixes of them."""
+    freqs = np.asarray(freqs, dtype=float)
+    d = freqs * split * crng.uniform(0.3, 1.0, len(freqs))
+    fa, fb = freqs - 0.5 * d, freqs + 0.5 * d
+    ta = np.asarray(t60s, dtype=float) * crng.uniform(0.9, 1.1, len(freqs))
+    tb = np.asarray(t60s, dtype=float) * crng.uniform(0.9, 1.1, len(freqs))
+    return fa, fb, ta, tb
+
+
+def _glass_frag(sr, crng, f0, t60):
+    """One glass fragment: a small, stiff, high-Q plate with a few inharmonic
+    modes, the higher ones dying sooner."""
+    r = np.array((1.0, crng.uniform(1.3, 1.55), crng.uniform(1.9, 2.4), crng.uniform(2.6, 3.2), crng.uniform(3.4, 4.2)))
+    g = np.array((1.0, 0.8, 0.6, 0.45, 0.3)) * crng.uniform(0.4, 1.0, 5)
+    return _bells_modes(f0 * r, t60 * np.array((1.0, 0.8, 0.6, 0.5, 0.4)), g, sr)
 
 
 def _glass_break(ev, sr, rng, crng, p, seed):
-    """Glass shattering: a sharp crack, the body's ring as it fails, then
-    dozens of shards hitting the floor and each other, thinning out."""
+    """Glass shattering. The blow cracks the glass in a few milliseconds (a
+    sharp broadband crack and the body's own ring, cut short as it fails);
+    then the pieces land, each fragment a small high-Q plate that rings at
+    its own pitch every time it hits the floor and bounces (big pieces lower
+    and longer, splinters high and short); last, a trickle of tiny bits
+    tinkling to rest. A pane's pieces fall first and crash down a few tenths
+    of a second later."""
     n = _n(ev, sr)
     dur = n / sr
     kind = seed % 3
-    at = int(0.003 * sr)
-    crack = bandlimit(_burst(rng, n, at, int(0.05 * sr), 0.006, sr, rise=0.0005), sr, 800.0, 9000.0, order=4)
-    ring_f = crng.uniform(1100, 2200) * (0.6 if kind == 1 else 1.0)
-    ring = _strike(n, sr, at, ring_f * np.array((1.0, 2.3, 3.9, 5.6)), (0.12, 0.09, 0.06, 0.04), (1, 0.7, 0.5, 0.3), rng, 0.0003)
-    thud = bandlimit(_burst(rng, n, at, int(0.1 * sr), 0.02, sr, rise=0.002), sr, 80.0, 600.0, order=2)
-    shards_l = np.zeros(n)
-    shards_r = np.zeros(n)
-    count = (45, 70, 55)[kind]
-    span = min(dur - 0.05, (0.6, 1.0, 0.7)[kind])
-    for i in range(count):
-        dt = 0.006 + crng.gamma(1.4, span / 5.0)
-        if dt >= dur - 0.03:
+    t0 = 0.004
+    at0 = int(t0 * sr)
+    crack = np.zeros(n)
+    _bells_place(crack, at0, bandlimit(_burst(rng, int(0.08 * sr), 0, int(0.07 * sr), (0.01, 0.016, 0.012)[kind], sr, rise=0.0003), sr, 500.0, None, order=2, pad=1024))
+    fb = (crng.uniform(1500, 2800), crng.uniform(500, 1000), crng.uniform(800, 1500))[kind]
+    body = np.zeros(n)
+    _bells_place(body, at0, _bells_modes(fb * np.array((1.0, 2.1, 3.6, 5.2)), (0.08, 0.06, 0.045, 0.035), (1, 0.7, 0.5, 0.3), sr))
+    thud = np.zeros(n)
+    _bells_place(thud, at0, bandlimit(_burst(rng, int(0.2 * sr), 0, int(0.1 * sr), (0.012, 0.01, 0.025)[kind], sr, rise=0.002), sr, 60.0, 500.0, order=2, pad=2048))
+
+    left = np.zeros(n)
+    right = np.zeros(n)
+    contacts = []
+    count = (45, 60, 45)[kind]
+    land = crng.uniform(0.28, 0.42)  # pane: the fall to the ground
+    for _ in range(count):
+        size = crng.random() ** 1.6  # most fragments are small
+        f0 = np.exp(np.log(7800.0) * (1.0 - size) + np.log((2200.0, 1500.0, 1300.0)[kind]) * size) * crng.uniform(0.9, 1.1)
+        t60 = (0.025 + 0.3 * size) * crng.uniform(0.7, 1.3)
+        ir = _glass_frag(sr, crng, f0, t60)
+        if kind == 1 and crng.random() < 0.7:
+            tm = t0 + land + crng.gamma(2.0, 0.035)
+        else:
+            tm = t0 + crng.gamma(1.3, 0.05)
+        gap = crng.uniform(0.04, 0.15) * (0.6 + 0.8 * size)
+        ratio = crng.uniform(0.45, 0.65)
+        a = crng.uniform(0.4, 1.0) * (0.5 + size) * np.exp(-max(0.0, tm - t0 - (land if kind == 1 else 0.0)) / 0.5)
+        w = crng.uniform(0.15, 0.85)
+        for _b in range(int(crng.integers(2, 6))):
+            if tm > dur - 0.06:
+                break
+            at = int(tm * sr)
+            _bells_place(left, at, ir, a * (1.0 - w))
+            _bells_place(right, at, ir, a * w)
+            contacts.append((tm, a))
+            tm += gap * crng.uniform(0.85, 1.15)
+            gap *= ratio
+            a *= crng.uniform(0.35, 0.6)
+    # splinters: dozens of tiny bits, very high and very short
+    tiny = [_glass_frag(sr, crng, crng.uniform(6500, 9000), crng.uniform(0.008, 0.025)) for _ in range(6)]
+    span = (0.5, 0.8, 0.6)[kind]
+    for _ in range((140, 220, 160)[kind]):
+        tm = t0 + ((land if kind == 1 and crng.random() < 0.6 else 0.0) + crng.gamma(1.2, span / 4.0))
+        if tm > dur - 0.04:
             continue
-        s = crng.uniform(0.25, 1.0) * np.exp(-dt / (0.6 * span))
-        sh = _shard(n, sr, int(dt * sr), rng, crng, bright=(1.0, 0.85, 0.95)[kind]) * s
-        w = crng.uniform(0.2, 0.8)
-        shards_l += sh * (1 - w)
-        shards_r += sh * w
-    debris_g = _grains(rng, n, 0.01 + crng.gamma(1.2, span / 4.0, 300), np.ones(300) * 0.3, sr)
-    debris = bandlimit(debris_g, sr, 3000.0, 10000.0, order=4)
-    base = 0.9 * _norm(crack) + 0.3 * _norm(ring) + (0.4 if kind == 2 else 0.2) * _norm(thud) + 0.45 * _norm(debris)
-    m = max(np.abs(shards_l).max(), np.abs(shards_r).max(), 1e-12)
-    return base + 1.4 * shards_l / m, base + 1.4 * shards_r / m
+        a = crng.uniform(0.1, 0.35) * np.exp(-(tm - t0) / (1.2 * span))
+        w = crng.uniform(0.1, 0.9)
+        ir = tiny[int(crng.integers(0, 6))]
+        _bells_place(left, int(tm * sr), ir, a * (1.0 - w))
+        _bells_place(right, int(tm * sr), ir, a * w)
+        contacts.append((tm, 0.5 * a))
+    # the hit itself is a click (a few hundred microseconds of contact)
+    ct = np.array([c[0] for c in contacts])
+    ca = np.array([c[1] for c in contacts])
+    clicks = _bells_clicks(n, sr, ct, ca, 2500.0, rng)
+    m = max(np.abs(left).max(), np.abs(right).max(), 1e-12)
+    clicks = 0.9 * clicks / max(np.abs(clicks).max(), 1e-12)
+    base = 0.9 * _norm(crack) + 0.3 * _norm(body) + (0.45 if kind == 2 else 0.25) * _norm(thud) + clicks
+    return base + 1.4 * left / m, base + 1.4 * right / m
 
 
 def _clock_tick(ev, sr, rng, crng, p, seed):
@@ -586,20 +692,64 @@ def _clock_tick(ev, sr, rng, crng, p, seed):
 
 def _bell_ring(n, sr, at, length, f, rng, crng, rate=20.0, partials=None):
     """An electromechanical bell: a clapper striking a metal gong `rate`
-    times per second for `length` s."""
+    times per second for `length` s (one train of blows into the gong's
+    modes)."""
     partials = partials or (1.0, 2.76, 5.4, 8.9)
     t60 = (0.6, 0.35, 0.2, 0.12)
-    out = np.zeros(n)
-    k = int(length * rate)
-    for i in range(k):
+    w = max(2, int(0.0004 * sr))
+    pulse = np.sin(np.pi * (np.arange(w) + 0.5) / w)
+    m = 4 * w + 2
+    tt = np.arange(m) / sr
+    rise = np.minimum(1.0, 0.5 - 0.5 * np.cos(np.pi * np.minimum(tt / 0.0005, 1.0)))
+    exc = np.zeros(n)
+    for i in range(int(length * rate)):
         a_ = at + int(i / rate * sr)
         if a_ >= n:
             break
-        out += crng.uniform(0.85, 1.0) * _strike(n, sr, a_, f * np.array(partials), t60, (1.0, 0.6, 0.35, 0.2), rng, 0.0004, noise=0.2)
-    return out
+        a = crng.uniform(0.85, 1.0)
+        _bells_place(exc, a_, pulse, a)
+        _bells_place(exc, a_, 0.2 * rng.standard_normal(m) * np.exp(-tt / 0.0004) * rise, a)
+    return _fftconv(exc, _bells_modes(f * np.array(partials), t60, (1.0, 0.6, 0.35, 0.2), sr), n)
+
+
+def _phone_vibrate(n, sr, rng, crng):
+    """A phone vibrating on a table: an eccentric-mass motor (~150-190 Hz)
+    spins up in ~60 ms and shakes the phone, which chatters against the
+    tabletop once per turn: a click train through the phone's case and the
+    table, plus the motor's own hum. Bursts of ~0.8 s."""
+    dur = n / sr
+    fm = crng.uniform(150, 190)
+    table = _bells_modes(crng.uniform(170, 260) * np.array((1.0, 2.3, 3.9, 6.1)), (0.1, 0.07, 0.05, 0.035), (1, 0.7, 0.5, 0.3), sr)
+    case = _bells_modes(crng.uniform(900, 1400) * np.array((1.0, 1.8, 2.9, 4.3)), (0.02, 0.015, 0.012, 0.01), (1, 0.6, 0.4, 0.25), sr)
+    on = crng.uniform(0.7, 1.0)
+    cycle = on + crng.uniform(0.8, 1.1)
+    exc = np.zeros(n)
+    hum = np.zeros(n)
+    start = 0.01
+    while start < dur - 0.2:
+        at = int(start * sr)
+        k = min(int(on * sr), n - at - int(0.02 * sr))
+        if k < int(0.1 * sr):
+            break
+        tt = np.arange(k) / sr
+        spin = 1.0 - np.exp(-tt / 0.06)  # spin-up
+        stop = np.exp(-np.clip(tt - (k / sr - 0.06), 0.0, None) / 0.02)  # coasts down when cut
+        f = fm * spin * (0.6 + 0.4 * stop) * (1.0 + 0.01 * np.sin(TAU * 3.0 * tt))
+        ph = np.cumsum(f) / sr
+        idx = np.nonzero(np.diff(np.floor(ph)) > 0)[0] + 1
+        amp = (spin[idx] * stop[idx]) ** 2 * crng.uniform(0.6, 1.0, len(idx))
+        np.add.at(exc, at + idx, amp)
+        hum[at : at + k] += _harmonic(f, sr, (1.0, 0.35, 0.2, 0.1)) * spin * stop
+        start += cycle
+    rattle = _fftconv(exc, 0.5 * table + np.pad(case, (0, max(0, len(table) - len(case))))[: len(table)], n)
+    mono = _norm(rattle) + 0.3 * _norm(hum)
+    return bandlimit(mono, sr, 80.0, 6000.0, order=2)
 
 
 def _phone_ring(ev, sr, rng, crng, p, seed):
+    """0/1: an electromechanical bell phone (a clapper flicking between two
+    small gongs ~20 times a second, in the national cadence); 2: a marimba
+    ringtone through a phone's small loudspeaker; 3: vibrating on a table."""
     n = _n(ev, sr)
     dur = n / sr
     kind = seed % 4
@@ -624,10 +774,14 @@ def _phone_ring(ev, sr, rng, crng, p, seed):
                 mono += _bell_ring(n, sr, at + int(0.025 * sr), L, f2, rng, crng, rate=20.0)
             start += cycle
     elif kind == 2:
-        # A modern ringtone: a soft marimba-like arpeggio, repeated.
+        # A modern ringtone: a soft marimba-like arpeggio, repeated, played
+        # by a phone's tiny loudspeaker (no bass, a little strained).
         root = crng.uniform(520, 640)
         steps = [0, 4, 7, 12, 7, 4, 0, 12] if crng.random() < 0.5 else [0, 7, 12, 16, 12, 7, 12, 19]
-        note = 0.14
+        note = 0.13
+        bars = {}
+        w = int(0.0015 * sr)
+        mallet = np.sin(np.pi * (np.arange(w) + 0.5) / w)  # a soft mallet's contact
         start = 0.01
         while start < dur - 0.2:
             for j, s in enumerate(steps):
@@ -635,26 +789,14 @@ def _phone_ring(ev, sr, rng, crng, p, seed):
                 if at >= n - int(0.05 * sr):
                     break
                 f = root * 2 ** (s / 12)
-                mono += _strike(n, sr, at, (f, 4.0 * f, 9.2 * f), (0.35, 0.08, 0.03), (1.0, 0.22, 0.05), rng, 0.0015)
-            start += len(steps) * note + 0.8
+                if f not in bars:
+                    bars[f] = np.convolve(_bells_modes((f, 4.0 * f, 9.2 * f), (0.35, 0.08, 0.03), (1.0, 0.22, 0.05), sr), mallet)
+                _bells_place(mono, at, bars[f])
+            start += len(steps) * note + 0.6
+        mono = bandlimit(mono, sr, 550.0, 7000.0, order=2)
+        mono = saturate(1.4 * mono / max(np.abs(mono).max(), 1e-12), 1.8)
     else:
-        # Vibrating on a table: a motor buzz (~150 Hz) rattling the surface,
-        # in pulses.
-        start = 0.01
-        while start < dur - 0.2:
-            for off in (0.0, 0.55):
-                at = int((start + off) * sr)
-                k = int(0.4 * sr)
-                if at + k >= n:
-                    break
-                tt = np.arange(k) / sr
-                fm = crng.uniform(140, 170)
-                buzz = _harmonic(np.full(k, fm), sr, (1.0, 0.5, 0.4, 0.3, 0.25, 0.2, 0.15, 0.1))
-                rattle = bandlimit(rng.standard_normal(k), sr, 300.0, 2500.0, order=2) * (0.5 + 0.5 * np.sin(TAU * fm * tt)) ** 4
-                y = (buzz + 0.6 * _norm(rattle)) * np.sin(np.pi * np.clip(tt / 0.02, 0, 0.5)) * np.cos(0.5 * np.pi * np.clip((tt - 0.37) / 0.03, 0, 1))
-                mono[at : at + k] += y
-            start += 2.0
-        mono = bandlimit(mono, sr, 80.0, 4000.0, order=2)
+        mono = _phone_vibrate(n, sr, rng, crng)
     return mono, _decorrelate(mono, sr, crng)
 
 
@@ -795,43 +937,131 @@ def _cork_pop(ev, sr, rng, crng, p, seed):
     return mono, _decorrelate(mono, sr, crng)
 
 
-def _coin(n, sr, at, rng, crng, a=1.0, size=1.0):
-    f = crng.uniform(3400, 4400) / size
-    freqs = f * np.array((1.0, 1.52, 2.13, 2.8))
-    return a * _strike(n, sr, at, freqs, (0.25, 0.18, 0.12, 0.08), (1, 0.6, 0.4, 0.25), rng, 0.00015, noise=0.3)
+def _coin_ir(sr, crng, size, t60):
+    """A coin: a thin free metal disc. Its first modes, (2,0), (0,1) and
+    (3,0), sit at 1 : 1.73 : 2.33, high up (real coins ring ~5-12 kHz; the
+    ones under our 9 kHz band carry it). Every mode is a doublet, split by
+    the relief stamped on the faces: the shimmer of a ringing coin."""
+    f1 = crng.uniform(5000, 6200) / size
+    freqs = f1 * np.array((1.0, 1.73, 2.33)) * crng.uniform(0.99, 1.01, 3)
+    fa, fb, ta, tb = _bells_doublets(freqs, t60 * np.array((1.0, 0.7, 0.5)), crng, 0.004)
+    g = np.array((1.0, 0.55, 0.45))
+    return _bells_modes(np.r_[fa, fb], np.r_[ta, tb], np.r_[g, g * crng.uniform(0.5, 1.0, 3)], sr)
 
 
 def _coin_drop(ev, sr, rng, crng, p, seed):
+    """Coins on a hard surface. A dropped coin bounces on its rim: each
+    landing is a pair of contacts (rim, then face) and a high 'ching'; the
+    coin rings freely between bounces; the bounces come quicker (restitution
+    ~0.55), then it rattles on the spot, faster and faster as it falls flat,
+    and stops dead. A spun coin is Euler's disk: the contact runs round the
+    rim at a rate that climbs steeply towards the end, a rising whirr. A
+    handful in a dish is a clatter of coins on china and on each other."""
     n = _n(ev, sr)
     dur = n / sr
     kind = seed % 3
+    t = np.arange(n) / sr
+    floor = _bells_modes(crng.uniform(300, 500) * np.array((1.0, 2.2, 3.7)), (0.05, 0.035, 0.025), (1, 0.6, 0.4), sr)
+    clicks_t, clicks_a = [], []
     mono = np.zeros(n)
-    if kind == 0:
-        times = 0.005 + _bounces(crng.uniform(0.16, 0.22), 0.62, 12, crng)
-        for i, tm in enumerate(times):
-            if tm < dur - 0.05:
-                mono += _coin(n, sr, int(tm * sr), rng, crng, 0.75**i)
-    elif kind == 1:
-        # Euler's disk: contacts come faster and quieter as it settles
-        times = [0.005]
-        g = 0.09
-        while times[-1] < dur - 0.1 and g > 0.004:
-            times.append(times[-1] + g)
-            g *= 0.93
-        for i, tm in enumerate(times):
-            if tm < dur - 0.03:
-                mono += _coin(n, sr, int(tm * sr), rng, crng, 0.5 + 0.5 * (i % 2), 1.0)
-        # the final shudder
-        st = int(times[-1] * sr)
-        mono += 0.3 * bandlimit(_burst(rng, n, st, int(0.08 * sr), 0.02, sr), sr, 2000.0, 7000.0, order=4)
+
+    def settle(t_start, a0, length, r0, rmax, exc):
+        """Rattle to rest: contacts at a rate climbing like Euler's disk."""
+        i0 = int(t_start * sr)
+        i1 = min(n - int(0.03 * sr), int((t_start + length) * sr))
+        if i1 - i0 < 10:
+            return t_start
+        tt = (np.arange(i1 - i0)) / sr
+        rate = np.minimum(rmax, r0 * (length / np.maximum(length - tt, 1e-3)) ** 0.6)
+        ph = np.cumsum(rate) / sr
+        idx = np.nonzero(np.diff(np.floor(ph)) > 0)[0] + 1
+        amp = a0 * (0.5 + 0.5 * (tt[idx] / length) ** 2) * crng.uniform(0.5, 1.0, len(idx))
+        np.add.at(exc, i0 + idx, amp)
+        clicks_t.extend(t_start + tt[idx])
+        clicks_a.extend(0.6 * amp)
+        return t_start + tt[-1]
+
+    if kind in (0, 1):
+        size = crng.uniform(0.9, 1.25)
+        free = _coin_ir(sr, crng, size, crng.uniform(0.5, 0.9))
+        damped = _coin_ir(sr, crng, size, crng.uniform(0.04, 0.07))
+        exc_free = np.zeros(n)
+        exc_damp = np.zeros(n)
+        if kind == 0:
+            tm, a = 0.005, 1.0
+            gap = crng.uniform(0.16, 0.26)
+            ratio = crng.uniform(0.5, 0.62)
+            for _b in range(int(crng.integers(4, 7))):
+                if tm > dur - 0.3:
+                    break
+                for dt, f in ((0.0, 1.0), (crng.uniform(0.003, 0.012), crng.uniform(0.3, 0.6))):
+                    at = int((tm + dt) * sr)
+                    exc_free[at] += a * f
+                    clicks_t.append(tm + dt)
+                    clicks_a.append(a * f)
+                tm += gap * crng.uniform(0.9, 1.1)
+                gap *= ratio
+                a *= crng.uniform(0.55, 0.75)
+                if gap < 0.025:
+                    break
+            t_set = tm
+            end = settle(t_set, 0.5 * a + 0.25, min(crng.uniform(0.35, 0.7), dur - t_set - 0.08), crng.uniform(18, 30), 140.0, exc_damp)
+        else:
+            exc_free[int(0.005 * sr)] = 0.8
+            clicks_t.append(0.005)
+            clicks_a.append(0.8)
+            t_set = 0.02
+            T = crng.uniform(0.7, 0.85) * dur
+            end = settle(0.05, 0.3, T - 0.05, crng.uniform(16, 24), 240.0, exc_damp)
+            # the spinning coin keeps some of its ring: the rim drives it
+            exc_free[: int(end * sr)] += 0.25 * exc_damp[: int(end * sr)]
+        ring = _fftconv(exc_free, free, n)
+        # once it rattles or lies flat on the floor, the contact damps the ring
+        ring *= np.where(t < t_set, 1.0, np.exp(-np.maximum(t - t_set, 0.0) / 0.12))
+        ring *= np.where(t < end, 1.0, np.exp(-np.maximum(t - end, 0.0) / 0.015))
+        # the final clack as it drops flat
+        at = int(end * sr) + 1
+        if at < n:
+            exc_damp[at] += 0.5
+            clicks_t.append(end)
+            clicks_a.append(0.6)
+        mono = ring + _fftconv(exc_damp, damped, n)
+        body = _fftconv(exc_free + exc_damp, floor, n)
+        mono = mono + 0.25 * body * np.abs(mono).max() / max(np.abs(body).max(), 1e-12)
     else:
-        for _ in range(int(crng.integers(6, 11))):
-            t0 = 0.005 + crng.gamma(1.5, 0.05)
-            for i, tm in enumerate(t0 + _bounces(crng.uniform(0.04, 0.09), 0.55, 4, crng)):
-                if tm < dur - 0.05:
-                    mono += _coin(n, sr, int(tm * sr), rng, crng, crng.uniform(0.4, 1.0) * 0.6**i, crng.uniform(0.8, 1.3))
-        dish = _strike(n, sr, int(0.006 * sr), (crng.uniform(700, 900), 1650.0, 2700.0), (0.4, 0.25, 0.15), (1, 0.5, 0.3), rng, 0.0005)
-        mono += 0.4 * np.max(np.abs(mono)) * _norm(dish)
+        dish = _bells_modes(crng.uniform(900, 1300) * np.array((1.0, 2.2, 3.6, 5.1)), (0.35, 0.25, 0.15, 0.1), (1, 0.6, 0.4, 0.25), sr)
+        k = int(crng.integers(6, 11))
+        coins = [_coin_ir(sr, crng, crng.uniform(0.85, 1.3), crng.uniform(0.15, 0.35)) for _ in range(k)]
+        exc_dish = np.zeros(n)
+        for c in range(k):
+            tm = 0.005 + crng.gamma(1.5, 0.035)
+            a = crng.uniform(0.5, 1.0)
+            gap = crng.uniform(0.03, 0.08)
+            for _b in range(int(crng.integers(2, 5))):
+                if tm > dur - 0.05:
+                    break
+                at = int(tm * sr)
+                _bells_place(mono, at, coins[c], a)
+                # it hits another coin as often as the dish
+                if crng.random() < 0.5:
+                    _bells_place(mono, at, coins[int(crng.integers(0, k))], 0.5 * a)
+                else:
+                    exc_dish[at] += a
+                clicks_t.append(tm)
+                clicks_a.append(a)
+                tm += gap * crng.uniform(0.8, 1.2)
+                gap *= 0.55
+                a *= crng.uniform(0.35, 0.6)
+        for _ in range(int(crng.integers(3, 7))):  # settling: a few late clinks
+            tm = crng.uniform(0.3, min(1.2, dur - 0.1))
+            a = crng.uniform(0.05, 0.15)
+            _bells_place(mono, int(tm * sr), coins[int(crng.integers(0, k))], a)
+            clicks_t.append(tm)
+            clicks_a.append(a)
+        d = _fftconv(exc_dish, dish, n)
+        mono = mono + 0.35 * d * np.abs(mono).max() / max(np.abs(d).max(), 1e-12)
+    clicks = _bells_clicks(n, sr, clicks_t, clicks_a, 2000.0, rng)
+    mono = mono / max(np.abs(mono).max(), 1e-12) + 0.35 * _norm(clicks)
     return mono, _decorrelate(mono, sr, crng)
 
 
@@ -887,31 +1117,53 @@ def _wood_creak(ev, sr, rng, crng, p, seed):
 
 
 def _heartbeat(ev, sr, rng, crng, p, seed):
-    """Lub-dub: two low, soft thumps (valves closing), heard through the
-    chest, the second shorter and a little higher."""
+    """Heart sounds as heard on the chest. S1 ('lub') is the mitral then the
+    tricuspid valve closing 20-35 ms apart: a low, heavily damped thump
+    (25-120 Hz, ~0.1 s). S2 ('dub'), the aortic then the pulmonary valve, is
+    shorter, a little higher and crisper, split wider on inspiration. S1 to
+    S2 is the systole (~0.35 s at rest, shorter as the heart races); the beat
+    interval breathes with respiration (sinus arrhythmia). The chest wall and
+    the stethoscope pass only the low end."""
     n = _n(ev, sr)
     dur = n / sr
-    bpm = (62.0, 88.0, 120.0)[seed % 3] * crng.uniform(0.97, 1.03)
+    kind = seed % 3
+    bpm = (62.0, 88.0, 120.0)[kind] * crng.uniform(0.97, 1.03)
     period = 60.0 / bpm
-    split = 0.3 * period ** 0.5 * 0.55
+    systole = max(0.2, 0.5 - 0.0024 * bpm)
+    resp = crng.uniform(3.5, 5.0)
+    rph = crng.uniform(0.0, TAU)
+    rsa = (0.04, 0.025, 0.012)[kind]
+    f_s1, f_s2 = crng.uniform(34, 44), crng.uniform(50, 62)
     mono = np.zeros(n)
-    tm = 0.02
-    while tm < dur - 0.25:
-        for off, f, d, a in ((0.0, crng.uniform(58, 68), 0.055, 1.0), (split, crng.uniform(78, 92), 0.04, 0.8)):
-            at = int((tm + off) * sr)
-            k = min(n - at, int(8 * d * sr))
-            if k < 10:
-                continue
-            tt = np.arange(k) / sr
-            # a damped thump with a slight downward pitch bend, a soft
-            # attack (the chest wall filters the click), a little body
-            fb = f * (1.0 + 0.25 * np.exp(-tt / 0.015))
-            ph = TAU * np.cumsum(fb) / sr
-            env = (1.0 - np.exp(-tt / 0.004)) * np.exp(-tt / d)
-            y = (np.sin(ph) + 0.35 * np.sin(2 * ph) + 0.12 * np.sin(3.1 * ph)) * env
-            mono[at : at + k] += a * y
-        tm += period * crng.uniform(0.98, 1.02)
-    mono = bandlimit(mono, sr, 35.0, 900.0, order=2)
+    tex = np.zeros(n)
+
+    def thump(at, f, tau, amp):
+        k = min(n - at, int(7 * tau * sr))
+        if k < 10:
+            return
+        tt = np.arange(k) / sr
+        env = (1.0 - np.exp(-tt / 0.004)) * np.exp(-tt / tau)
+        ph = TAU * np.cumsum(f * (1.0 + 0.15 * np.exp(-tt / 0.02))) / sr
+        y = np.sin(ph) * env + 0.45 * np.sin(2.3 * ph + 0.7) * env * np.exp(-tt / (0.5 * tau))
+        mono[at : at + k] += amp * y
+        tex[at : at + k] += amp * env
+
+    tm = 0.03
+    while tm < dur - 0.2:
+        insp = 0.5 + 0.5 * np.sin(TAU * tm / resp + rph)
+        a = crng.uniform(0.88, 1.0) * (1.0 - 0.08 * insp)
+        thump(int(tm * sr), f_s1 * crng.uniform(0.95, 1.05), crng.uniform(0.022, 0.03), a)
+        thump(int((tm + crng.uniform(0.02, 0.035)) * sr), f_s1 * crng.uniform(1.1, 1.25), 0.02, 0.55 * a)
+        t2 = tm + systole * crng.uniform(0.98, 1.02)
+        if t2 < dur - 0.1:
+            thump(int(t2 * sr), f_s2 * crng.uniform(0.95, 1.05), crng.uniform(0.014, 0.018), 0.75 * a)
+            split = crng.uniform(0.012, 0.022) + 0.025 * insp
+            thump(int((t2 + split) * sr), f_s2 * crng.uniform(1.1, 1.3), 0.012, 0.4 * a)
+        tm += period * (1.0 + rsa * np.sin(TAU * tm / resp + rph)) * crng.uniform(0.99, 1.01)
+    # a little of the valves' broadband texture, low-passed by the chest
+    noise = bandlimit(rng.standard_normal(n), sr, 30.0, 250.0, order=2)
+    mono = _norm(mono) + 0.25 * _norm(noise * tex)
+    mono = bandlimit(mono, sr, 22.0, 400.0, order=2)
     return mono, mono
 
 
@@ -1007,33 +1259,61 @@ def _can_opening(ev, sr, rng, crng, p, seed):
 
 
 def _clock_alarm(ev, sr, rng, crng, p, seed):
+    """0: a twin-bell wind-up alarm clock. A hammer on a spring arm
+    oscillates between two small domed bells, striking each ~12-15 times a
+    second (25-30 hits/s in all); the bells ring on between strikes, so it
+    is a continuous, rattling, beating metallic ring that slows a touch as
+    the spring runs down. 1: a digital alarm: a piezo disc driven by a
+    2048 Hz square wave (its resonance near 4 kHz makes the 2nd harmonic
+    the loudest), in bursts of 2-4 beeps each second."""
     n = _n(ev, sr)
     dur = n / sr
     mono = np.zeros(n)
     if seed % 2 == 0:
-        # a hammer flicking between two bells, ~18 hits per second
-        f1, f2 = crng.uniform(2300, 2700), crng.uniform(2800, 3200)
-        rate = crng.uniform(16, 20)
-        k = int(dur * rate)
-        for i in range(k):
-            at = int((0.005 + i / rate) * sr)
-            if at >= n - int(0.02 * sr):
-                break
-            f = f1 if i % 2 == 0 else f2
-            mono += crng.uniform(0.85, 1.0) * _strike(n, sr, at, (f, f * 2.32, f * 0.5), (0.25, 0.12, 0.3), (1.0, 0.35, 0.3), rng, 0.0003, noise=0.3)
+        f1 = crng.uniform(1700, 2400)
+        f2 = f1 * crng.uniform(1.1, 1.3)
+        fh = crng.uniform(12.0, 15.0)
+        ratios = np.array((1.0, 1.72, 2.65, 3.75))
+        excs, irs = [], []
+        for f in (f1, f2):
+            fr = f * ratios * crng.uniform(0.98, 1.02, 4)
+            fa, fb, ta, tb = _bells_doublets(fr, np.array((0.9, 0.6, 0.4, 0.28)) * crng.uniform(0.7, 1.2), crng, 0.006)
+            g = np.array((0.7, 0.6, 1.0, 0.6)) * crng.uniform(0.6, 1.0, 4)
+            irs.append(_bells_modes(np.r_[fa, fb], np.r_[ta, tb], np.r_[g, 0.7 * g], sr))
+            excs.append(np.zeros(n))
+        tm = 0.005
+        hits_t = []
+        while tm < dur - 0.03:
+            per = (1.0 / fh) * (1.0 + 0.05 * tm / dur) * crng.uniform(0.96, 1.04)
+            for b, off in ((0, 0.0), (1, crng.uniform(0.45, 0.55))):
+                th = tm + off * per
+                if th < dur - 0.03:
+                    excs[b][int(th * sr)] += crng.uniform(0.55, 1.0)
+                    hits_t.append(th)
+            tm += per
+        ring = _fftconv(excs[0], irs[0], n) + crng.uniform(0.7, 1.0) * _fftconv(excs[1], irs[1], n)
+        # the hammer's metal-on-metal tick
+        ht = np.array(hits_t)
+        tick = _bells_clicks(n, sr, ht, crng.uniform(0.5, 1.0, len(ht)), 2500.0, rng)
+        # the frame and the loose hammer arm buzz along with every blow
+        rattle = rng.standard_normal(n) * _fftconv(excs[0] + excs[1], np.exp(-np.arange(int(0.012 * sr)) / (0.003 * sr)), n)
+        rattle = bandlimit(rattle, sr, 1500.0, None, order=2)
+        mono = _norm(ring) + 0.3 * _norm(tick) + 0.12 * _norm(rattle)
     else:
-        # digital: four short square-ish beeps at ~2.7 kHz, then a pause
-        f = crng.uniform(2600, 2900)
+        f = 2048.0 * crng.uniform(0.98, 1.02)
+        beeps = int(crng.integers(2, 5))
+        on = crng.uniform(0.05, 0.08)
+        gap = crng.uniform(0.11, 0.14)
         start = 0.005
         while start < dur - 0.1:
-            for j in range(4):
-                at = int((start + j * 0.12) * sr)
-                k = int(0.07 * sr)
+            for j in range(beeps):
+                at = int((start + j * gap) * sr)
+                k = int(on * sr)
                 if at + k >= n:
                     break
                 tt = np.arange(k) / sr
-                y = _harmonic(np.full(k, f), sr, (1.0, 0.0, 0.25, 0.0, 0.1))
-                y *= np.sin(np.pi * np.clip(tt / 0.003, 0, 0.5)) * np.cos(0.5 * np.pi * np.clip((tt - 0.066) / 0.004, 0, 1))
+                y = saturate(_harmonic(np.full(k, f), sr, (0.4, 1.0, 0.35, 0.25)), 1.5)
+                y *= np.sin(np.pi * np.clip(tt / 0.004, 0, 0.5)) * np.cos(0.5 * np.pi * np.clip((tt - on + 0.005) / 0.005, 0, 1))
                 mono[at : at + k] += y
             start += 1.0
     return mono, _decorrelate(mono, sr, crng, taps=3)
@@ -1229,27 +1509,53 @@ def _engine(ev, sr, rng, crng, p, seed):
 
 
 def _church_bell(ev, sr, rng, crng, p, seed):
-    """A tower bell: the classic partials (hum 0.5, prime 1, tierce 1.2,
-    quint 1.5, nominal 2, upper partials), the hum ringing longest, a little
-    beating from the bell's asymmetry."""
+    """A tower bell heard from the street. A tuned bronze bell's partials,
+    relative to the nominal: hum 0.25, prime 0.5, tierce 0.6 (the minor
+    third that gives a bell its sound), quint 0.75, nominal 1, then the
+    superquint 1.5, the octave nominal 2 and a forest of upper partials to
+    4-5x. The iron clapper's blow excites the upper partials strongly, and
+    they die within a second or two while the hum rings on for tens of
+    seconds. Every partial is a doublet (the bell is not perfectly round),
+    so they beat slowly, and the two ears hear different mixes of each pair."""
     n = _n(ev, sr)
     dur = n / sr
-    f = crng.uniform(380, 520)
-    ratios = np.array((0.5, 1.0, 1.183, 1.506, 2.0, 2.5, 2.66, 3.01, 4.0))
-    t60 = np.array((7.0, 5.0, 4.0, 3.0, 2.6, 1.6, 1.4, 1.1, 0.7))
-    g = (0.4, 0.8, 0.9, 0.4, 1.0, 0.5, 0.45, 0.35, 0.25)
+    fN = crng.uniform(520, 980)
+    ratios = np.array((0.25, 0.5, 0.6, 0.75, 1.0, 1.25, 1.335, 1.5, 2.0, 2.5, 2.67, 3.0, 3.36, 4.0, 4.5, 5.0))
+    ratios = ratios * crng.uniform(0.993, 1.007, len(ratios))
+    ratios[0] *= crng.uniform(0.97, 1.03)  # old bells: hum and prime are rarely true
+    ratios[1] *= crng.uniform(0.98, 1.02)
+    ratios[4] = 1.0
+    size = (700.0 / fN) ** 0.8
+    t60 = np.array((24, 12, 9, 6, 6, 3, 3, 3.5, 2.6, 1.8, 1.6, 1.4, 1.1, 0.9, 0.7, 0.55)) * size
+    g = np.array((0.35, 0.5, 0.75, 0.25, 1.0, 0.2, 0.3, 0.55, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.12, 0.08))
+    g = g * crng.uniform(0.75, 1.25, len(g))
+    fa, fb, ta, tb = _bells_doublets(fN * ratios, t60, crng, 0.0012)
+    # each ear hears its own blend of the two halves of every doublet
+    u_l = crng.uniform(0.25, 0.75, len(g))
+    u_r = np.clip(u_l + crng.uniform(-0.2, 0.2, len(g)), 0.1, 0.9)
+    ir_l = np.zeros(n)
+    ir_r = np.zeros(n)
+    for i in range(len(g)):
+        for f, d, ul, ur in ((fa[i], ta[i], u_l[i], u_r[i]), (fb[i], tb[i], 1.0 - u_l[i], 1.0 - u_r[i])):
+            k = min(n, int(1.1 * d * sr) + 1)
+            m = g[i] * _bells_mode(f, d, sr, k)
+            ir_l[:k] += ul * m
+            ir_r[:k] += ur * m
     strikes = [0.005] if seed % 2 == 0 else list(np.arange(0.005, max(0.01, dur - 0.5), 2.5))
-    left = np.zeros(n)
-    right = np.zeros(n)
+    amps = crng.uniform(0.85, 1.0, len(strikes))
+    # the clapper's clank: iron on bronze, a few ms
+    k = int(0.05 * sr)
+    clank = np.zeros(n)
     for st in strikes:
-        at = int(st * sr)
-        for chan in (left, right):
-            fr = f * ratios * crng.uniform(0.998, 1.002, len(ratios))
-            chan += _strike(n, sr, at, fr, t60, g, rng, 0.001, noise=0.2)
-    clang = bandlimit(np.sum([_burst(rng, n, int(s * sr), int(0.02 * sr), 0.004, sr) for s in strikes], axis=0), sr, 600.0, 5000.0, order=2)
-    c = 0.15 * _norm(clang)
+        _bells_place(clank, int(st * sr), bandlimit(_burst(rng, k, 0, int(0.02 * sr), 0.003, sr), sr, 1000.0, 6000.0, order=2, pad=1024))
     fo = _fade_out(n, sr, min(1.5, 0.3 * dur))
-    return (_norm(left) + c) * fo, (_norm(right) + c) * fo
+    out = []
+    for ir in (ir_l, ir_r):
+        y = np.zeros(n)
+        for st, a in zip(strikes, amps):
+            _bells_place(y, int(st * sr), ir, a)
+        out.append((_norm(y) + 0.05 * _norm(clank)) * fo)
+    return out[0], out[1]
 
 
 def _fireworks(ev, sr, rng, crng, p, seed):
