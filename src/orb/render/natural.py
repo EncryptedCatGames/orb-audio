@@ -237,104 +237,198 @@ def _harmonic(f: np.ndarray, sr: int, amps, phase: float = 0.0) -> np.ndarray:
 # =============================================================================
 
 
-def _syllable(n: int, sr: int, at: int, f_a: float, f_b: float, length: float, shape: str,
-              crng: np.random.Generator) -> np.ndarray:
-    """One bird syllable: a pure whistle gliding from f_a to f_b, a soft
-    second harmonic, a smooth amplitude bump."""
-    k = int(length * sr)
-    if at >= n or k < 8:
-        return np.zeros(n)
-    k = min(k, n - at)
-    u = np.arange(k) / max(1, k - 1)
-    if shape == "down":
-        f = f_b + (f_a - f_b) * (1.0 - u) ** 2
-    elif shape == "up":
-        f = f_a + (f_b - f_a) * u**1.5
-    else:  # arch
-        f = f_a + (f_b - f_a) * np.sin(np.pi * u)
-    f = f * (1.0 + 0.012 * np.sin(TAU * crng.uniform(40, 80) * np.arange(k) / sr))
-    ph = TAU * np.cumsum(f) / sr
-    env = np.sin(np.pi * u) ** 1.5
-    y = (np.sin(ph) + 0.08 * np.sin(2 * ph)) * env
+def _anim_env(k: int, rise: float, power: float = 1.0) -> np.ndarray:
+    """A k-sample bump: raised-cosine rise over `rise` of it, cos^2 fall over
+    the rest, both reaching exactly 0 at the ends."""
+    a = int(np.clip(rise * k, 1, k - 1))
+    b = k - a
+    e = np.empty(k)
+    e[:a] = 0.5 - 0.5 * np.cos(np.pi * (np.arange(a) + 0.5) / a)
+    e[a:] = 0.5 + 0.5 * np.cos(np.pi * (np.arange(b) + 0.5) / b)
+    return e**power if power != 1.0 else e
+
+
+def _anim_lowpass(x: np.ndarray, sr: int, hi: float, order: int = 2) -> np.ndarray:
+    """Zero-phase Butterworth-magnitude low-pass on a power-of-two FFT (the
+    far-off layers of the animal roles: air absorption)."""
+    n = len(x)
+    nfft = 1 << (n + 2048 - 1).bit_length()
+    f = np.fft.rfftfreq(nfft, 1.0 / sr)
+    return np.fft.irfft(np.fft.rfft(x, nfft) / np.sqrt(1.0 + (f / hi) ** (2 * order)), nfft)[:n]
+
+
+def _anim_add(out: np.ndarray, at: int, y: np.ndarray) -> None:
+    """Add `y` into `out` starting at sample `at`, clipped to the buffer."""
+    n = len(out)
+    if at < 0 or at >= n:
+        return
+    k = min(len(y), n - at)
+    out[at : at + k] += y[:k]
+
+
+def _bird_note(sr: int, kind: str, f_a: float, f_b: float, length: float, crng: np.random.Generator,
+               h2: float = 0.2) -> np.ndarray:
+    """One syllable from the syrinx: a fast frequency sweep (birds sweep
+    kilohertz in tens of ms), its 2nd/3rd harmonics, an asymmetric amplitude
+    bump. `kind`: down (steep falling chip), up, arch (inverted U), whistle
+    (near steady), buzz (fast FM, so sidebands: a rough, burry note)."""
+    k = max(16, int(length * sr))
+    u = np.arange(k) / (k - 1)
+    t = np.arange(k) / sr
+    if kind == "down":
+        f = f_b + (f_a - f_b) * (1.0 - u) ** 2.2
+        env = _anim_env(k, 0.12)
+    elif kind == "up":
+        f = f_a + (f_b - f_a) * u**1.6
+        env = _anim_env(k, 0.6)
+    elif kind == "arch":
+        f = f_a * (1.0 - u) + f_b * u + crng.uniform(0.12, 0.3) * max(f_a, f_b) * np.sin(np.pi * u) ** 1.3
+        env = _anim_env(k, 0.35)
+    elif kind == "buzz":
+        f = (f_a + (f_b - f_a) * u) * (1.0 + crng.uniform(0.04, 0.08) * np.sin(TAU * crng.uniform(90, 170) * t))
+        env = _anim_env(k, 0.2, 0.6)
+    else:  # whistle
+        f = f_a + (f_b - f_a) * u
+        env = _anim_env(k, 0.12, 0.5)
+    f = f * (1.0 + 0.005 * np.sin(TAU * crng.uniform(25, 60) * t + crng.uniform(0, TAU)))
+    ph = TAU * np.cumsum(f) / sr + crng.uniform(0, TAU)
+    y = np.sin(ph) + h2 * np.sin(2 * ph + 0.4) + 0.3 * h2 * np.sin(3 * ph + 1.1) * (3 * f < 0.45 * sr)
+    # Louder where the sweep is higher: the syrinx's output rises with tension.
+    return y * env * (f / f.mean()) ** 0.7
+
+
+def _bird_song(n: int, sr: int, kind: int, crng: np.random.Generator, start: float, base: float,
+               pause: float = 1.0) -> np.ndarray:
+    """One bird singing song type `kind` (see VARIANTS) from `start` s."""
     out = np.zeros(n)
-    out[at : at + k] = y
+    dur = n / sr
+    t = start
+    while t < dur - 0.08:
+        at = int(t * sr)
+        if kind == 0:  # sparrow: steep "chip"s and arched "cheep"s, in irregular runs
+            for _ in range(int(crng.integers(2, 7))):
+                if crng.random() < 0.55:
+                    L, fa = crng.uniform(0.025, 0.045), crng.uniform(5200, 6600) * base
+                    y = _bird_note(sr, "down", fa, fa * crng.uniform(0.55, 0.7), L, crng, h2=0.15)
+                else:
+                    L, fa = crng.uniform(0.05, 0.09), crng.uniform(2900, 3700) * base
+                    y = _bird_note(sr, "arch", fa, fa * crng.uniform(0.8, 1.0), L, crng, h2=crng.uniform(0.3, 0.5))
+                _anim_add(out, at, crng.uniform(0.6, 1.0) * y)
+                at += int((L + crng.uniform(0.06, 0.2)) * sr)
+            t = at / sr + crng.uniform(0.15, 0.7) * pause
+        elif kind == 1:  # trill: an intro note, then a fast run of identical down-chips
+            fa = crng.uniform(5200, 6400) * base
+            _anim_add(out, at, 0.7 * _bird_note(sr, "whistle", fa * 0.72, fa * 0.68, 0.09, crng, h2=0.05))
+            at += int(crng.uniform(0.14, 0.2) * sr)
+            reps = int(crng.integers(12, 26))
+            L = crng.uniform(0.018, 0.028)
+            period = 1.0 / crng.uniform(12, 18)
+            drop = crng.uniform(0.5, 0.65)
+            for r in range(reps):
+                g = min(1.0, 0.45 + r / 5.0) * crng.uniform(0.85, 1.0)
+                _anim_add(out, at, g * _bird_note(sr, "down", fa, fa * drop, L, crng, h2=0.18))
+                at += int(period * crng.uniform(0.97, 1.03) * sr)
+            t = at / sr + crng.uniform(0.6, 1.4) * pause
+        elif kind == 2:  # warbled phrase: varied slurred notes, a burry one now and then
+            for _ in range(int(crng.integers(4, 9))):
+                shape = str(crng.choice(("down", "up", "arch", "arch", "buzz")))
+                L = crng.uniform(0.05, 0.13) if shape != "down" else crng.uniform(0.03, 0.06)
+                fa = crng.uniform(2200, 4200) * base
+                fb = float(np.clip(fa * crng.uniform(0.65, 1.4), 1800, 6000))
+                _anim_add(out, at, crng.uniform(0.55, 1.0) * _bird_note(sr, shape, fa, fb, L, crng, h2=crng.uniform(0.12, 0.35)))
+                at += int((L + crng.uniform(0.025, 0.07)) * sr)
+            t = at / sr + crng.uniform(0.4, 1.0) * pause
+        else:  # two-note whistle "fee-bee": a pure high note, then one ~15% lower
+            f1 = crng.uniform(3700, 4200) * base
+            _anim_add(out, at, _bird_note(sr, "whistle", f1 * 1.01, f1 * 0.985, crng.uniform(0.24, 0.3), crng, h2=0.04))
+            at += int(crng.uniform(0.34, 0.4) * sr)
+            f2 = f1 * crng.uniform(0.82, 0.87)
+            _anim_add(out, at, 0.85 * _bird_note(sr, "whistle", f2 * 1.03, f2, crng.uniform(0.26, 0.34), crng, h2=0.04))
+            t = at / sr + 0.3 + crng.uniform(0.9, 1.6) * pause
     return out
 
 
 def _bird_chirp(ev, sr, rng, crng, p, seed):
+    """Birdsong outdoors: the singer close, plus one or two other birds
+    farther off (quieter, darker from air absorption, their own timing), as
+    in any real recording of birds."""
     n = _n(ev, sr)
-    dur = n / sr
     kind = seed % 4
-    mono = np.zeros(n)
-    t = 0.01
-    base = crng.uniform(0.85, 1.15)
-    while t < dur - 0.08:
-        at = int(t * sr)
-        if kind == 0:  # sparrow "chip": short down-sweeps in a little group
-            for _ in range(int(crng.integers(2, 5))):
-                L = crng.uniform(0.035, 0.06)
-                f_hi = crng.uniform(3900, 5200) * base
-                mono += crng.uniform(0.7, 1.0) * _syllable(n, sr, at, f_hi, f_hi * 0.55, L, "down", crng)
-                at += int((L + crng.uniform(0.05, 0.11)) * sr)
-            t = at / sr + crng.uniform(0.35, 0.9)
-        elif kind == 1:  # trill: a fast run of identical short notes
-            reps = int(crng.integers(8, 16))
-            L = crng.uniform(0.022, 0.032)
-            gap = crng.uniform(0.012, 0.022)
-            f_hi = crng.uniform(3500, 4800) * base
-            for r in range(reps):
-                mono += (0.6 + 0.4 * np.sin(np.pi * (r + 0.5) / reps)) * _syllable(n, sr, at, f_hi, f_hi * 0.7, L, "down", crng)
-                at += int((L + gap) * sr)
-            t = at / sr + crng.uniform(0.5, 1.2)
-        elif kind == 2:  # warbled phrase: varied syllables, rises and falls
-            for _ in range(int(crng.integers(4, 8))):
-                L = crng.uniform(0.04, 0.11)
-                fa = crng.uniform(2400, 3800) * base
-                fb = min(5200.0, fa * crng.uniform(0.7, 1.35))
-                shape = str(crng.choice(("down", "up", "arch")))
-                mono += crng.uniform(0.6, 1.0) * _syllable(n, sr, at, fa, fb, L, shape, crng)
-                at += int((L + crng.uniform(0.02, 0.06)) * sr)
-            t = at / sr + crng.uniform(0.6, 1.4)
-        else:  # two-note whistle "fee-bee": a high note then a lower one
-            f1 = crng.uniform(3600, 4100) * base
-            mono += _syllable(n, sr, at, f1 * 1.01, f1 * 0.99, 0.28, "down", crng)
-            at += int(0.36 * sr)
-            mono += 0.9 * _syllable(n, sr, at, f1 * 0.84, f1 * 0.8, 0.3, "down", crng)
-            t = at / sr + 0.3 + crng.uniform(0.8, 1.6)
-    p["reverb"], p["reverb_decay"] = 0.2, 1.0
-    return mono, _decorrelate(mono, sr, crng)
+    near = _bird_song(n, sr, kind, crng, 0.01, crng.uniform(0.88, 1.12))
+    far_l = np.zeros(n)
+    far_r = np.zeros(n)
+    for _ in range(int(crng.integers(1, 3))):
+        other = int(crng.choice((0, 1, 2)))
+        far = _bird_song(n, sr, other, crng, crng.uniform(0.1, 1.2), crng.uniform(0.8, 1.15), pause=1.6)
+        pos = crng.uniform(0.1, 0.9)
+        g = crng.uniform(0.12, 0.28)
+        far_l += g * (1.0 - pos) * 2 * far
+        far_r += g * pos * 2 * far
+    cut = crng.uniform(4500, 6500)  # air absorption takes the highs off the far birds
+    p["reverb"], p["reverb_decay"] = 0.22, 1.1
+    return near + _anim_lowpass(far_l, sr, cut), _decorrelate(near, sr, crng) + _anim_lowpass(far_r, sr, cut)
+
+
+def _cricket_voice(n: int, sr: int, crng: np.random.Generator, fc: float, trill: bool, h2: float) -> np.ndarray:
+    """One male cricket. Each wing closure drags the scraper over the file's
+    teeth at the harp's own frequency (an escapement), so a pulse is a burst
+    of a near-pure carrier (falling slightly as the stroke slows) with weak
+    harmonics. Field crickets group 3-5 pulses into a chirp; tree and ground
+    crickets trill (pulses on and on)."""
+    out = np.zeros(n)
+    dur = n / sr
+    rate = crng.uniform(25, 34) if not trill else crng.uniform(38, 60)
+    L = (0.55 if not trill else 0.5) / rate
+    k = int(L * sr)
+    tt = np.arange(k) / sr
+    f = fc * (1.0 + 0.02 * (0.5 - tt / L))
+    ph = TAU * np.cumsum(f) / sr
+    pulse = (np.sin(ph) + h2 * np.sin(2 * ph + 0.5) + 0.3 * h2 * np.sin(3 * ph + 1.3)) * _anim_env(k, 0.25, 0.8)
+    if trill:
+        level = 0.35 + 0.65 * _smooth(crng, n, sr, crng.uniform(0.3, 0.8))
+        tm = crng.uniform(0.0, 0.3)
+        while tm < dur:
+            at = int(tm * sr)
+            _anim_add(out, at, level[min(at, n - 1)] * crng.uniform(0.85, 1.0) * pulse)
+            tm += crng.uniform(0.97, 1.03) / rate
+        return out
+    per = int(crng.integers(3, 6))
+    shape = 0.65 + 0.35 * np.sin(np.pi * (np.arange(per) + 0.6) / (per + 0.2))
+    chirp_period = 1.0 / crng.uniform(1.6, 3.0)
+    tm = crng.uniform(0.0, chirp_period)
+    while tm < dur:
+        for j in range(per):
+            _anim_add(out, int((tm + j / rate) * sr), shape[j] * crng.uniform(0.88, 1.0) * pulse)
+        tm += chirp_period * crng.uniform(0.92, 1.08)
+    return out
 
 
 def _crickets(ev, sr, rng, crng, p, seed):
-    """Field crickets: a pure carrier near 4.5 kHz (the wing's harp), gated
-    into pulses (one per wing closure, ~30 per second), 3-5 pulses per chirp,
-    a couple of chirps per second."""
+    """Crickets at night: 0 one field cricket close, 1 two answering each
+    other, 2 a field chorus; always with fainter distant singers behind, as a
+    real field is never just one insect."""
     n = _n(ev, sr)
     dur = n / sr
-    t = np.arange(n) / sr
-    count = (1, 2, 7)[seed % 3]
+    kind = seed % 3
+    if kind == 0:
+        near = [(1.0, 0.5)]
+    elif kind == 1:
+        near = [(1.0, 0.3), (crng.uniform(0.5, 0.8), 0.72)]
+    else:
+        near = [(crng.uniform(0.45, 1.0), crng.uniform(0.15, 0.85)) for _ in range(3)]
+    far_count, far_level = ((3, 0.07), (4, 0.1), (10, 0.22))[kind]
+    voices = [(g, pos, crng.uniform(4300, 4900), False, 0.18) for g, pos in near]
+    for _ in range(far_count):
+        trill = bool(crng.random() < 0.45)
+        fc = crng.uniform(2800, 3800) if trill else crng.uniform(4100, 5000)
+        voices.append((far_level * crng.uniform(0.4, 1.0), crng.uniform(0.05, 0.95), fc, trill, 0.06))
     left = np.zeros(n)
     right = np.zeros(n)
-    for c in range(count):
-        fc = crng.uniform(4200, 4900)
-        pulse_rate = crng.uniform(26, 34)
-        per = int(crng.integers(3, 6))
-        chirp_rate = crng.uniform(1.6, 2.6)
-        env = np.zeros(n)
-        tm = crng.uniform(0.0, 1.0 / chirp_rate)
-        while tm < dur:
-            for k in range(per):
-                pt = tm + k / pulse_rate
-                at = int(pt * sr)
-                env += _hann_env(n, at, int(0.6 / pulse_rate * sr), 0.25)
-            tm += (1.0 / chirp_rate) * crng.uniform(0.9, 1.1)
-        f = fc * (1.0 + 0.004 * np.sin(TAU * crng.uniform(0.1, 0.4) * t))
-        y = _harmonic(f, sr, (1.0, 0.06, 0.02)) * env
-        level = 1.0 if c == 0 else crng.uniform(0.2, 0.55)
-        pos = 0.5 if count == 1 else crng.uniform(0.15, 0.85)
-        left += level * y * (1.0 - pos) * 2
-        right += level * y * pos * 2
-    p["reverb"], p["reverb_decay"] = (0.1, 0.15, 0.25)[seed % 3], 0.9
+    for g, pos, fc, trill, h2 in voices:
+        y = g * _cricket_voice(n, sr, crng, fc, trill, h2)
+        left += y * (1.0 - pos) * 2
+        right += y * pos * 2
+    p["reverb"], p["reverb_decay"] = (0.1, 0.15, 0.25)[kind], 0.9
     fo = _fade_out(n, sr, min(0.2, 0.3 * dur))
     return left * fo, right * fo
 
@@ -440,77 +534,215 @@ def _splash(ev, sr, rng, crng, p, seed):
     return mono, _decorrelate(mono, sr, crng)
 
 
+def _frog_glottis(n: int, sr: int, crng: np.random.Generator, notes, jitter: float = 0.02,
+                  shimmer: float = 0.15) -> np.ndarray:
+    """A frog's larynx: air pushed from the lungs makes glottal pulses at the
+    vocal-fold rate f0, and a note may gate them into pulse groups (the
+    rattle of a "rib", the growl of a bullfrog). Returns the impulse train;
+    `_frog_sac` rings the throat and vocal sac with it.
+
+    `notes`: (t0 s, length s, f0 start, f0 end, pulse rate Hz (0 = none),
+    pulse depth 0-1, rise fraction, amplitude)."""
+    exc = np.zeros(n)
+    for t0, L, fa, fb, pr, depth, rise, amp in notes:
+        at, k = int(t0 * sr), int(L * sr)
+        if at >= n or k < 32:
+            continue
+        k = min(k, n - at)
+        u = np.arange(k) / k
+        f0 = (fa + (fb - fa) * u) * (1.0 + jitter * (2.0 * _smooth(crng, k, sr, 80.0) - 1.0))
+        idx = np.nonzero(np.diff(np.floor(np.cumsum(f0) / sr)) > 0)[0] + 1
+        env = _anim_env(k, rise, 0.7)
+        if pr > 0:
+            env = env * (1.0 - depth + depth * np.sin(np.pi * pr * u * L) ** 4)
+        exc[at + idx] += amp * env[idx] * crng.uniform(1.0 - shimmer, 1.0, len(idx))
+    return exc
+
+
+def _frog_sac(exc: np.ndarray, sr: int, formants, width: float) -> np.ndarray:
+    """Each glottal pulse is a smooth puff `width` s long (wider = darker),
+    which rings the throat and inflated vocal sac: a bank of resonances
+    (Hz, t60 s, gain)."""
+    fr, t60, g = zip(*formants)
+    ir = _modes_ir(fr, t60, g, sr, len(exc))
+    k = max(2, int(width * sr))
+    ir = np.convolve(ir, np.sin(np.pi * (np.arange(k) + 0.5) / k))
+    return _fftconv(exc, ir, len(exc))
+
+
+def _frog_pulse(sr: int, fd: float, length: float, crng: np.random.Generator, low: float = 0.35) -> np.ndarray:
+    """One call pulse of a tree / chorus frog: a short burst of the dominant
+    carrier (the larynx's vibration, tuned by the vocal sac), a weaker band
+    an octave down and a faint 2nd harmonic, rising fast and dying away."""
+    k = max(16, int(length * sr))
+    t = np.arange(k) / sr
+    ph = TAU * np.cumsum(fd * (1.0 + 0.04 * t / length)) / sr + crng.uniform(0, TAU)
+    y = np.sin(ph) + 0.15 * np.sin(2 * ph + 0.5) + low * np.sin(0.5 * ph + 0.9)
+    env = (1.0 - np.exp(-t / 0.0012)) * np.exp(-t / (0.4 * length))
+    return y * env * _fade_out(k, sr, 0.25 * length)
+
+
+def _frog_ribbit(n: int, sr: int, crng: np.random.Generator, out: np.ndarray, start: float, gain: float) -> None:
+    """A chorus frog calling "rib-bit" over and over: two pulse trains (a
+    frog's note is a run of discrete pulses, 50-100 per second, not a held
+    tone), the second faster and a little higher; each note swells."""
+    dur = n / sr
+    fd = crng.uniform(1700, 2400)
+    rate = crng.uniform(55, 75)
+    period = crng.uniform(0.6, 1.0)
+    t = start
+    while t < dur - 0.25 or (t == start and t < dur - 0.05):
+        cs = t
+        for f, r, count, off in ((fd, rate, int(crng.integers(5, 9)), 0.0),
+                                 (fd * crng.uniform(1.04, 1.1), rate * crng.uniform(1.1, 1.3), int(crng.integers(8, 13)), None)):
+            if off is None:
+                t += crng.uniform(0.03, 0.06)
+            for j in range(count):
+                a = gain * (0.45 + 0.55 * (j + 1) / count) * crng.uniform(0.85, 1.0)
+                _anim_add(out, int(t * sr), a * _frog_pulse(sr, f * crng.uniform(0.98, 1.02), 0.7 / r, crng))
+                t += crng.uniform(0.95, 1.05) / r
+        t = max(t + 0.15, cs + period * crng.uniform(0.85, 1.2))
+
+
+def _frog_peeps(n: int, sr: int, crng: np.random.Generator, out: np.ndarray, start: float, gain: float) -> None:
+    """A spring peeper: a short, pure, upslurred "peep" near 3 kHz about
+    once a second (a tiny frog, a single high whistle of a call)."""
+    dur = n / sr
+    f0 = crng.uniform(2650, 3100)
+    period = crng.uniform(0.7, 1.3)
+    t = start
+    while t < dur - 0.15 or (t == start and t < dur - 0.05):
+        L = crng.uniform(0.08, 0.13)
+        k = int(L * sr)
+        u = np.arange(k) / k
+        ph = TAU * np.cumsum(f0 * (0.86 + 0.14 * u**0.7)) / sr
+        y = (np.sin(ph) + 0.08 * np.sin(2 * ph)) * _anim_env(k, 0.5, 0.8)
+        _anim_add(out, int(t * sr), gain * crng.uniform(0.85, 1.0) * y)
+        t += period * crng.uniform(0.85, 1.15)
+
+
 def _frog(ev, sr, rng, crng, p, seed):
-    """A frog call: a vocal sac buzz, i.e. a low carrier pulsed fast, in
-    one or two bursts (rib-bit), repeated."""
+    """Frogs at a pond: 0 a chorus frog's two-part "rib-bit" (two pulse
+    trains), 1 a bullfrog's deep "rumm" (a low glottal rate, a growl, a low
+    sac resonance plus a ~1.3 kHz one), 2 spring peepers' short rising
+    "peep"s. Frogs call in choruses: the near caller is joined by neighbours
+    of its kind farther off (quieter, duller), each on its own clock."""
     n = _n(ev, sr)
     dur = n / sr
     kind = seed % 3
-    mono = np.zeros(n)
-    t = 0.02
-    while t < dur - 0.1:
-        if kind == 0:
-            f0, rate, parts = crng.uniform(480, 620), crng.uniform(80, 110), ((0.0, 0.07), (0.12, 0.09))
-        elif kind == 1:
-            f0, rate, parts = crng.uniform(110, 150), crng.uniform(14, 20), ((0.0, 0.55),)
-        else:
-            f0, rate, parts = crng.uniform(2600, 3000), 0.0, ((0.0, 0.06),)
-        for off, L in parts:
-            at = int((t + off) * sr)
-            k = int(L * sr)
-            if at + k >= n:
-                break
-            tt = np.arange(k) / sr
-            f = f0 * (1.0 + 0.06 * (tt / L))
-            if kind == 1:
-                y = _harmonic(f, sr, (1.0, 0.7, 0.5, 0.25, 0.15))
-            elif kind == 0:
-                y = _harmonic(f, sr, (1.0, 0.6, 0.45, 0.3, 0.15, 0.08))
-            else:
-                y = _harmonic(f, sr, (1.0, 0.04))
-            if rate > 0:  # pulsed: the sac buzzes
-                y *= np.clip(np.sin(np.pi * rate * tt), 0, 1) ** 2
-            y *= np.sin(np.pi * np.arange(k) / k) ** 0.6
-            mono[at : at + k] += y
-        t += (0.35 if kind == 0 else 1.0 if kind == 1 else 0.3) + crng.uniform(0.25, 0.9)
+    others = (int(crng.integers(2, 4)), 1, int(crng.integers(5, 9)))[kind]
+    near = np.zeros(n)
+    far_l, far_r = np.zeros(n), np.zeros(n)
     if kind == 1:
-        mono = bandlimit(mono, sr, 60.0, 1800.0, order=2)
-    elif kind == 0:
-        mono = bandlimit(mono, sr, 250.0, 3500.0, order=2)
-    return mono, _decorrelate(mono, sr, crng)
+        s_near, s_far = crng.uniform(0.92, 1.08), crng.uniform(0.9, 1.1)
+        for c in range(1 + others):
+            f0 = crng.uniform(95, 125)
+            t = 0.03 if c == 0 else crng.uniform(0.9, 1.6)
+            notes = []
+            for _ in range(int(crng.integers(2, 4)) if c == 0 else 2):
+                if t + 0.1 > dur:
+                    break
+                L = crng.uniform(0.5, 0.75)
+                notes.append((t, min(L, dur - t - 0.02), f0 * 1.03, f0 * 0.95, crng.uniform(18, 28), 0.6, 0.12, 1.0))
+                t += L + crng.uniform(0.3, 0.55)
+            exc = _frog_glottis(n, sr, crng, notes, jitter=0.05, shimmer=0.4)
+            if c == 0:
+                near = exc
+            else:
+                g, pos = crng.uniform(0.25, 0.4), crng.uniform(0.05, 0.95)
+                far_l += g * (1.0 - pos) * 2 * exc
+                far_r += g * pos * 2 * exc
+
+        def sac(s):
+            return ((210 * s, 0.035, 1.0), (430 * s, 0.025, 0.45), (1300 * s, 0.012, 0.7), (2300 * s, 0.008, 0.18))
+
+        near = _frog_sac(near, sr, sac(s_near), 0.0016)
+        far_l = _frog_sac(far_l, sr, sac(s_far), 0.0016)
+        far_r = _frog_sac(far_r, sr, sac(s_far), 0.0016)
+    else:
+        call = _frog_ribbit if kind == 0 else _frog_peeps
+        call(n, sr, crng, near, 0.02, 1.0)
+        for _ in range(others):
+            y = np.zeros(n)
+            call(n, sr, crng, y, crng.uniform(0.0, 0.9), crng.uniform(0.2, 0.45) if kind == 0 else crng.uniform(0.2, 0.9))
+            pos = crng.uniform(0.05, 0.95)
+            far_l += (1.0 - pos) * 2 * y
+            far_r += pos * 2 * y
+    scale = 1.0 / max(float(np.max(np.abs(near))), 1e-9)
+    near *= scale
+    # The neighbours are farther off: duller (air absorption).
+    left = near + _anim_lowpass(far_l * scale, sr, 5000.0)
+    right = _decorrelate(near, sr, crng) + _anim_lowpass(far_r * scale, sr, 5000.0)
+    p["reverb"], p["reverb_decay"] = 0.18, 0.9
+    return left, right
+
+
+def _owl_env(k: int, sr: int, attack: float, release: float) -> np.ndarray:
+    """Raised-cosine attack, a held middle, raised-cosine release."""
+    a = int(np.clip(attack * sr, 1, k // 2))
+    r = int(np.clip(release * sr, 1, k - a))
+    e = np.ones(k)
+    e[:a] = 0.5 - 0.5 * np.cos(np.pi * (np.arange(a) + 0.5) / a)
+    e[k - r :] = 0.5 + 0.5 * np.cos(np.pi * (np.arange(r) + 0.5) / r)
+    return e
+
+
+def _owl_hoot(sr: int, f0: float, L: float, crng, rng, tremolo: float = 0.0) -> np.ndarray:
+    """One hoot. An owl hoots with its bill shut and throat puffed: a low,
+    near-sinusoidal syrinx tone (weak harmonics), a soft swell in, a small
+    rise into pitch at the onset and a droop at the end, a slow wobble, and
+    breath turbulence that rides the airflow (noise modulated by the tone, so
+    it sits around the harmonics, not as hiss). The breath speaks a moment
+    before the tone does: the aspirated "h" of "h'hoo"."""
+    k = max(64, int(L * sr))
+    t = np.arange(k) / sr
+    u = np.arange(k) / k
+    f = f0 * (0.9 + 0.1 * (1.0 - np.exp(-t / 0.06))) * (1.0 - 0.08 * u**2.5)
+    f = f * (1.0 + 0.006 * (2.0 * _smooth(crng, k, sr, 10.0) - 1.0))
+    ph = TAU * np.cumsum(f) / sr + crng.uniform(0, TAU)
+    tone = np.sin(ph) + 0.3 * np.sin(2 * ph + 0.6) + 0.12 * np.sin(3 * ph + 1.2) + 0.05 * np.sin(4 * ph + 2.0)
+    breath = _norm(_anim_lowpass(rng.standard_normal(k), sr, 500.0, order=4)) * (0.5 + 0.5 * np.sin(ph))
+    y = tone + 0.2 * breath
+    env = _owl_env(k, sr, min(0.09, 0.3 * L), min(0.16, 0.4 * L))
+    if tremolo > 0:  # the tawny's quavering last note
+        env *= 1.0 - tremolo * (0.5 + 0.5 * np.sin(TAU * crng.uniform(9, 13) * t)) * np.clip((u - 0.25) / 0.3, 0, 1)
+    m = int(0.07 * sr)
+    h = m // 2
+    hb = _norm(_anim_lowpass(rng.standard_normal(m), sr, 900.0, order=4)) * np.sin(np.pi * np.arange(m) / m) ** 2 * 0.25
+    y = np.concatenate([hb[:h], y * env])
+    y[h:m] += hb[h:m]
+    return y
 
 
 def _owl(ev, sr, rng, crng, p, seed):
-    """Owl hoots: soft, breathy low whistles (~350-420 Hz) that swell in and
-    glide down a little at the end."""
+    """Owl hoots at night, a little way off in the trees: 0 a hooting phrase
+    (great horned "hoo, h'hoo-hoo, hoo, hoo" or tawny "hooo... hu, hu-hooooo"
+    with its quaver), 1 a single soft hoot. A phrase too long for the slot is
+    squeezed to fit."""
     n = _n(ev, sr)
     dur = n / sr
-    f0 = crng.uniform(330, 420)
-    pattern = ((0.0, 0.45, 1.0), (0.75, 0.22, 0.75), (1.05, 0.55, 0.95)) if seed % 2 == 0 else ((0.0, 0.7, 1.0),)
+    if seed % 2 == 0:
+        if crng.random() < 0.5:  # great horned
+            f0 = crng.uniform(270, 340)
+            pattern = ((0.0, 0.30, 0.85, 0.0), (0.45, 0.15, 0.7, 0.0), (0.62, 0.42, 1.0, 0.0),
+                       (1.25, 0.30, 0.75, 0.0), (1.72, 0.34, 0.7, 0.0))
+        else:  # tawny
+            f0 = crng.uniform(380, 460)
+            pattern = ((0.0, 0.6, 1.0, 0.0), (1.15, 0.12, 0.6, 0.0), (1.38, 0.1, 0.6, 0.0), (1.52, 0.6, 0.9, 0.45))
+        gap = crng.uniform(2.5, 3.5)
+    else:
+        f0 = crng.uniform(300, 380)
+        pattern = ((0.0, crng.uniform(0.5, 0.75), 1.0, 0.0),)
+        gap = crng.uniform(2.2, 3.2)
+    span = pattern[-1][0] + pattern[-1][1]
+    sc = min(1.0, (dur - 0.08) / span) if dur > 0.12 else 0.0
     mono = np.zeros(n)
-    start = 0.05
-    while start < dur - 0.4:
-        for off, L, a in pattern:
-            at = int((start + off) * sr)
-            k = int(L * sr)
-            if at + k >= n:
-                break
-            u = np.arange(k) / k
-            f = f0 * (1.0 + 0.03 * np.sin(np.pi * u) - 0.06 * u**3)
-            y = _harmonic(f, sr, (1.0, 0.18, 0.05))
-            breath = bandlimit(rng.standard_normal(k), sr, 250.0, 1400.0, order=2)
-            y = y + 0.25 * _norm(breath)
-            env = np.sin(np.pi * np.clip(u / 0.3, 0, 1) / 2) ** 2 * np.cos(np.pi * np.clip((u - 0.6) / 0.4, 0, 1) / 2) ** 2
-            mono[at : at + k] += a * y * env
-        start += (1.8 if seed % 2 == 0 else 1.2) + crng.uniform(1.0, 2.5)
-    if not mono.any() and n > int(0.15 * sr):
-        # Slot too short for the full pattern: one hoot squeezed to fit.
-        at, k = int(0.02 * sr), n - int(0.05 * sr)
-        u = np.arange(k) / k
-        f = f0 * (1.0 + 0.03 * np.sin(np.pi * u) - 0.06 * u**3)
-        y = _harmonic(f, sr, (1.0, 0.18, 0.05)) + 0.25 * _norm(bandlimit(rng.standard_normal(k), sr, 250.0, 1400.0, order=2))
-        env = np.sin(np.pi * np.clip(u / 0.3, 0, 1) / 2) ** 2 * np.cos(np.pi * np.clip((u - 0.6) / 0.4, 0, 1) / 2) ** 2
-        mono[at : at + k] += y * env
+    start = 0.03
+    while sc > 0 and start + span * sc < dur:
+        for off, L, a, trem in pattern:
+            _anim_add(mono, int((start + off * sc) * sr), a * _owl_hoot(sr, f0 * crng.uniform(0.99, 1.01), L * sc, crng, rng, trem))
+        start += span * sc + gap
+    p["reverb"], p["reverb_decay"] = 0.22, 1.3
     return mono, _decorrelate(mono, sr, crng, span=0.03)
 
 
