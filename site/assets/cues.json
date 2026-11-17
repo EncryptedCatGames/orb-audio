@@ -52357,7 +52357,7 @@
   "video": true,
   "poster": true
  },
- "py": "1166c7bf4dcc",
+ "py": "67657b4dc927",
  "planner": {
   "index": "assets/planner/planner.json",
   "bin": "assets/planner/planner.q8.bin",

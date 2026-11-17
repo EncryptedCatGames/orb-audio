@@ -676,7 +676,10 @@ def sync_media_flags() -> None:
         "video": (SITE / "assets" / "orb-demo.mp4").exists(),
         "poster": (SITE / "assets" / "orb-demo-poster.jpg").exists(),
     }
-    py_hash = json.loads((PY_DIR / "manifest.json").read_text(encoding="utf-8"))["sha256_12"]
+    # One cache-bust key for the in-browser engine: the Python bundle plus
+    # worker.js itself, so a worker-only change is never served stale.
+    bundle = json.loads((PY_DIR / "manifest.json").read_text(encoding="utf-8"))["sha256_12"]
+    py_hash = hashlib.sha256(bundle.encode() + (SITE / "worker.js").read_bytes()).hexdigest()[:12]
     if data.get("media") != media or data.get("py") != py_hash or data.get("planner") != planner_meta:
         data["media"] = media
         data["planner"] = planner_meta
