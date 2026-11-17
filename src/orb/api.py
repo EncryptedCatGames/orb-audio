@@ -247,7 +247,7 @@ def load_planner(path: str | Path | None = DEFAULT_PLANNER, device: str = "cpu")
         model = Planner(cfg.get("vocab_size", tokenizer.vocab_size), **cfg["model"])
         model.load_state_dict(load_file(str(path), device="cpu"))
     else:
-        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        ckpt = torch.load(path, map_location="cpu", weights_only=True)
         # The checkpoint's own vocabulary: older planners (v0.3: 394 tokens)
         # load next to a newer tokenizer and simply never emit the new ids.
         model = Planner(int(ckpt["model"]["tok_emb.weight"].shape[0]), **ckpt["config"]["model"])
@@ -275,7 +275,7 @@ def load_detail(path: str | Path | None = DEFAULT_DETAIL, device: str = "cpu"):
         model = DetailUNet(**cfg["model"])
         model.load_state_dict(load_file(str(path), device="cpu"))
     else:
-        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        ckpt = torch.load(path, map_location="cpu", weights_only=True)
         model = DetailUNet(**ckpt["config"]["model"])
         model.load_state_dict(ckpt["generator"])
     model.to(device).eval()
