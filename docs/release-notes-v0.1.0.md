@@ -130,7 +130,7 @@ for the full list of changes.
 > - 100% exact caption → Spec on held-out grammar captions, 0 invalid outputs, and plain words too
 > - the renderer is pure NumPy: no GPU, no weights, no samples
 > - an MCP server, so your agent can design sound alongside your motion graphics
-> - Apache-2.0 code and planner weights, plus a 100k training set (the optional
+> - Apache-2.0 code and planner weights, plus the 300k-row training set (the optional
 >   detail model is separate and non-commercial)
 >
 > Demo video: https://stdevmac.github.io/orb-audio/

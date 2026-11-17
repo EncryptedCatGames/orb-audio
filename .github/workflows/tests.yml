@@ -60,7 +60,8 @@ jobs:
           python examples/03_variants.py --n 2
 
       - name: CLI
-        run: orb-generate "4.00-second playful cue, vinyl bed, with ui pop @0.60 0.16s -12dB R1 #73" --out /tmp/cue.wav --json
+        run: |
+          orb-generate "4.00-second playful cue, vinyl bed, with ui pop @0.60 0.16s -12dB R1 #73" --out /tmp/cue.wav --json
 
   dsp-only:
     name: DSP path without torch

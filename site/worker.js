@@ -94,16 +94,19 @@ async function loadPlanner(msg) {
   const index = await (await fetch(new URL(meta.index + q, base))).text();
   const res = await fetch(new URL(meta.bin + q, base));
   if (!res.ok) throw new Error(`${meta.bin}: HTTP ${res.status}`);
-  const total = Number(res.headers.get("content-length")) || meta.bytes || 0;
+  // Prefer the exact size from planner.json: with gzip, content-length is the
+  // compressed size, not the number of bytes the reader will deliver.
+  const total = meta.bytes || Number(res.headers.get("content-length")) || 0;
   const buf = new Uint8Array(total || meta.bytes || 0);
   let loaded = 0;
+  let filled = 0;  // bytes written into buf (it stops filling once a chunk overflows it)
   const chunks = [];
   const reader = res.body.getReader();
   let last = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    if (loaded + value.length <= buf.length) buf.set(value, loaded);
+    if (!chunks.length && loaded + value.length <= buf.length) { buf.set(value, loaded); filled = loaded + value.length; }
     else chunks.push(value);
     loaded += value.length;
     const now = performance.now();
@@ -114,10 +117,12 @@ async function loadPlanner(msg) {
   }
   self.postMessage({ type: "progress", id: msg.id, loaded, total: loaded });
   let bytes = buf;
-  if (loaded !== buf.length) {  // no or wrong content-length: stitch the pieces
+  if (loaded !== buf.length || chunks.length) {
+    // No or wrong content-length (e.g. a gzip-compressed response reports the
+    // compressed size): stitch what landed in buf and the overflow chunks.
     bytes = new Uint8Array(loaded);
-    bytes.set(buf.subarray(0, Math.min(loaded, buf.length)), 0);
-    let off = Math.min(loaded, buf.length);
+    bytes.set(buf.subarray(0, filled), 0);
+    let off = filled;
     for (const c of chunks) { bytes.set(c, off); off += c.length; }
   }
   status("Loading the planner");
