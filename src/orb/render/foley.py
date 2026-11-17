@@ -5,9 +5,9 @@ Each one is a small physical model in numpy, like the roles in `events.py`,
 but built from the physics of the real sound rather than from sound-design
 primitives:
 
-* thunder: a close crack (a few stacked micro-transients plus crackle) and a
-  rolling rumble of low-passed noise driven by a train of arrivals from
-  different parts of the channel, decaying over seconds.
+* thunder: the shock waves of a tortuous lightning channel (thousands of
+  N-wave pulses, one per few metres of channel, arriving in order of distance),
+  with return strokes and terrain echoes.
 * door_slam: an air-pressure whump (40-90 Hz), the panel's thick low modes
   (70-180 Hz) and a damped mid knock, the frame thump, a quiet latch tick, and
   a room (early reflections and a short dark tail).
@@ -162,91 +162,188 @@ def _attack(n: int, sr: int, at: float, rise: float) -> np.ndarray:
 # -- thunder -----------------------------------------------------------------
 
 
+C_AIR = 343.0  # speed of sound, m/s
+
+# Tuned against AudioSet and CLAP judges (scored against ESC-50 thunderstorm clips): short N-waves (~4 ms),
+# a gentle loudness fall-off with distance (r**-0.43, multipath and ground focusing in place
+# of free-field 1/r), a nearly isotropic segment pattern, a 63 Hz microphone high-pass and a
+# mild compressor, as in a field recording.
+THUNDER = dict(t_n=0.0038, t_grow=0.19, rise0=0.0006, rise_exp=0.80, amp_exp=0.43, dir_floor=1.18,
+               span=0.90, echo=1.35, hp=63.0, step=3.2, cloud_e=0.43, dist=1.35, h_decay=8300.0, jitter=0.33,
+               branch_e=0.63, comp=0.12, t_pow=0.88, taper=0.44, t60_lo=1.8, t60_hi=1.1)
+
+
+def _tortuous(crng: np.random.Generator, start: np.ndarray, heading: np.ndarray, length: float, step: float,
+              wander: float, pull: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """A tortuous channel: `length` m of `step`-m segments from `start`.
+
+    Lightning is a chain of short straight segments whose directions scatter
+    by ~16 degrees around a slowly meandering mean direction. Returns the
+    segment midpoints and unit directions."""
+    k = max(1, int(length / step))
+    mean = heading / np.linalg.norm(heading)
+    mids = np.empty((k, 3))
+    dirs = np.empty((k, 3))
+    pos = np.array(start, dtype=np.float64)
+    for i in range(k):
+        mean = mean + wander * crng.standard_normal(3)
+        if pull is not None:
+            mean = mean + 0.08 * pull
+        mean /= np.linalg.norm(mean)
+        d = mean + 0.30 * crng.standard_normal(3)
+        d /= np.linalg.norm(d)
+        mids[i] = pos + 0.5 * step * d
+        dirs[i] = d
+        pos = pos + step * d
+    return mids, dirs
+
+
 def _thunder(ev: Event, sr: int, rng: np.random.Generator, crng: np.random.Generator, p: dict, seed: int):
+    """Thunder as it is made: a shock wave from every segment of a tortuous
+    lightning channel (Few 1969).
+
+    The flash heats a jagged channel kilometres long. Every few metres of it
+    launches a short N-shaped pressure pulse (compression, linear fall,
+    rarefaction). The listener hears the pulses in order of distance: the
+    nearest part of the channel first, the cloud top seconds later. Where the
+    channel runs across the line of sight many pulses arrive at once (a clap);
+    where it runs along it they string out into a roll. Distance stretches each
+    pulse and softens its shock fronts (air absorbs the highs), so the start is
+    a bright crack and the tail a dark rumble. Subsequent return strokes re-use
+    the main channel tens of milliseconds later, and the ground and terrain
+    return late echoes.
+    """
     n = max(1, int(ev.dur * sr))
     dur = n / sr
-    t = np.arange(n) / sr
-    # Distance: the seed's low two bits, with a little jitter inside the step.
-    dist = float(np.clip((seed % 4) / 3.0 + crng.uniform(-0.06, 0.06), 0.0, 1.0))
+    cls = seed % 4
+    # horizontal distance to the strike, by variant
+    K = THUNDER
+    dist_m = (350.0, 1200.0, 3000.0, 7500.0)[cls] * float(crng.uniform(0.8, 1.25)) * K['dist']
+    az0 = float(crng.uniform(-0.9, 0.9))  # strike bearing, radians from straight ahead
+    ground = np.array([dist_m * np.sin(az0), dist_m * np.cos(az0), 0.0])
+    ear = np.array([0.0, 0.0, 1.6])
 
-    # Rolling rumble. Sound from different parts of the channel arrives over
-    # the first part of the event; each arrival is a swell of low noise that
-    # decays over seconds. High frequencies die first (air absorption), so the
-    # mid band has its own, faster decays.
-    onset = 0.02 + 0.30 * dist  # a far strike has no sharp front
-    spread = (0.12 + 0.12 * dist) * dur
-    k = int(crng.integers(6, 12))
-    arrivals = np.sort(onset + crng.exponential(spread, k))
-    arrivals[0] = onset
-    amps = crng.lognormal(0.0, 0.5, k) * np.exp(-(arrivals - onset) / max(0.35 * dur, 1e-3))
-    amps[0] = max(amps[0], float(amps.max()))
-    decay = crng.uniform(0.06, 0.16, k) * dur  # e-folding time of each roll
-    rise = crng.uniform(0.03, 0.15, k) + 0.3 * dist
-    env_lo = np.zeros(n)
-    env_mid = np.zeros(n)
-    for a, at, d, r in zip(amps, arrivals, decay, rise):
-        if at >= dur:
-            continue
-        env_lo += a * _attack(n, sr, at, r) * np.exp(-np.maximum(t - at, 0.0) / d)
-        env_mid += a * _attack(n, sr, at, r * 0.6) * np.exp(-np.maximum(t - at, 0.0) / (0.5 * d))
-    # the whole roll dies away over the event, with slow random swells
-    overall = np.exp(-np.maximum(t - onset, 0.0) / max(0.33 * dur, 0.3))
-    swell = 0.3 + 0.7 * _smooth(crng, n, sr, 1.3)
-    tail = _fade_out(n, sr, min(0.3 * dur, 1.5))
-    env_lo *= overall * swell * tail
-    env_mid *= overall * swell * tail
+    # Channel: the main stroke from the ground up to the cloud, a long branch
+    # wandering through the cloud, and a few side branches off the main stroke.
+    top = float(crng.uniform(2500.0, 4500.0))
+    up = np.array([0.0, 0.0, 1.0])
+    step = K['step']
+    main, main_d = _tortuous(crng, ground, up + 0.3 * crng.standard_normal(3) * [1, 1, 0], top, step, 0.04, up)
+    cloud_parts, cloud_dirs = [], []
+    for _ in range(int(crng.integers(1, 3))):
+        h = np.array([crng.standard_normal(), crng.standard_normal(), 0.0])
+        m, d = _tortuous(crng, main[-1], h, float(crng.uniform(2000.0, 6000.0)), 6.0, 0.05,
+                         np.array([0.0, 0.0, -0.05]))
+        cloud_parts.append(m)
+        cloud_dirs.append(d)
+    br_parts, br_dirs = [], []
+    for _ in range(int(crng.integers(3, 7))):
+        at = int(crng.uniform(0.15, 0.8) * len(main))
+        h = np.array([crng.standard_normal(), crng.standard_normal(), -0.8])
+        m, d = _tortuous(crng, main[at], h, float(crng.uniform(150.0, 700.0)), step, 0.06)
+        br_parts.append(m)
+        br_dirs.append(d)
 
-    # Thunder's power peaks well below 100 Hz, but most of that is below what
-    # a speaker (or an ESC-50 recording) carries; the audible rumble is 40-250
-    # Hz. Far thunder keeps only the lowest of it (air absorption).
-    fc_lo = 230.0 - 100.0 * dist
-    fc_mid = 300.0 + 700.0 * (1.0 - dist)
-    mid_gain = 0.6 * (1.0 - 0.7 * dist)
+    def segs(mids, dirs, step, energy):
+        return mids, dirs, np.full(len(mids), step), np.full(len(mids), energy)
 
-    def rumble() -> np.ndarray:
-        lo = bandlimit(rng.standard_normal(n), sr, 38.0, fc_lo, order=2)
-        mid = bandlimit(rng.standard_normal(n), sr, 90.0, fc_mid, order=2)
-        return _norm(lo) * env_lo + mid_gain * _norm(mid) * env_mid
+    groups = [segs(main, main_d, step, 1.0)]
+    groups += [segs(m, d, 6.0, K['cloud_e']) for m, d in zip(cloud_parts, cloud_dirs)]
+    groups += [segs(m, d, step, K['branch_e']) for m, d in zip(br_parts, br_dirs)]
+    mids = np.concatenate([g[0] for g in groups])
+    dirs = np.concatenate([g[1] for g in groups])
+    seglen = np.concatenate([g[2] for g in groups])
+    energy = np.concatenate([g[3] for g in groups])
+    # the return-stroke current (and so the energy per metre) falls with height
+    energy = energy * np.exp(-np.maximum(mids[:, 2], 0.0) / K['h_decay'])
+    # 1-3 subsequent strokes down the main channel only (they do not branch)
+    strokes = int(crng.integers(0, 3))
+    offsets = np.zeros(len(mids))
+    if strokes:
+        extra = np.arange(len(main))
+        for s in range(strokes):
+            mids = np.concatenate([mids, main])
+            dirs = np.concatenate([dirs, main_d])
+            seglen = np.concatenate([seglen, np.full(len(main), step)])
+            e = np.exp(-np.maximum(main[:, 2], 0.0) / K['h_decay']) * float(crng.uniform(0.35, 0.7))
+            energy = np.concatenate([energy, e])
+            offsets = np.concatenate([offsets, np.full(len(extra), (s + 1) * float(crng.uniform(0.04, 0.11)))])
 
-    left, right = rumble(), rumble()
-    peak = max(float(np.abs(left).max()), float(np.abs(right).max()), 1e-12)
-    left, right = left / peak, right / peak
+    rel = mids - ear
+    r = np.maximum(np.linalg.norm(rel, axis=1), 30.0)
+    los = rel / r[:, None]
+    # a cylindrical shock radiates broadside to its segment
+    sin2 = 1.0 - np.sum(los * dirs, axis=1) ** 2
+    amp = energy * seglen / 3.0 * (K['dir_floor'] + sin2) / r ** K['amp_exp']
+    amp *= rng.lognormal(0.0, K['jitter'], len(amp))
 
-    # The close crack: a few fast, stacked micro-transients (the clap) and a
-    # tearing crackle over the first few hundred ms. Gone beyond ~mid range.
-    crack_amp = float(np.clip(1.0 - dist / 0.7, 0.0, 1.0))
-    if crack_amp > 0.0:
-        crack = np.zeros(n)
-        m = int(crng.integers(3, 8))
-        times = np.sort(crng.uniform(0.0, 0.10, m))
-        times[0] = 0.002
-        for i, tm in enumerate(times):
-            at = int(tm * sr)
-            length = int(crng.uniform(0.002, 0.008) * sr)
-            a = (1.0 if i == 0 else crng.uniform(0.35, 0.9))
-            crack += a * _burst(rng, n, at, 6 * length, length / sr, sr)
-        crack = bandlimit(crack, sr, 350.0, 9000.0, order=4)
-        # crackle: sparse impulses, dense at first, thinning out
-        span = min(dur, 0.35 + 0.8 * (1.0 - dist))
-        rate = 320.0
-        cnt = int(rng.poisson(rate * span * 0.4))
-        cr = np.zeros(n)
-        if cnt:
-            tt = rng.exponential(span * 0.35, cnt)
-            tt = tt[tt < span]
-            idx = (tt * sr).astype(int)
-            np.add.at(cr, idx, rng.standard_normal(len(idx)) * np.exp(-tt / (span * 0.5)))
-        cr = bandlimit(cr, sr, 900.0, 7000.0, order=4)
-        crack = _norm(crack) + 0.6 * _norm(cr)
-        crack = _norm(crack) * crack_amp
-        # the clap also kicks the low end: a short boom under the crack
-        boom = bandlimit(_burst(rng, n, 0, int(0.25 * sr), 0.06, sr), sr, 45.0, 200.0, order=2)
-        crack += 0.6 * crack_amp * _norm(boom)
-        rumble_level = 0.5 + 0.3 * dist
-        left = crack + rumble_level * left
-        right = crack + rumble_level * right
-    level = 1.0 - 0.35 * dist  # distance costs level
-    return left * level, right * level
+    # Arrival times. A real roll lasts 5-20 s; when the channel's arrivals
+    # span more than the event allows, the whole time axis is scaled to fit
+    # (a power below 1 keeps the opening a little more spread out).
+    t_real = (r - r.min()) / C_AIR
+    onset = 0.03
+    span = max(0.4, K['span'] * dur)
+    t_max = float(t_real.max()) + 1e-9
+    t_arr = onset + (span * (t_real / t_max) ** K['t_pow'] if t_max > span else t_real) + offsets
+    # the far end of the channel fades in strength instead of stopping dead
+    amp *= 0.5 + 0.5 * np.cos(np.pi * np.clip((t_real / t_max - K['taper']) / (1.0 - K['taper']), 0.0, 1.0))
+
+    # The N-wave: length grows slowly with distance, the shock fronts soften
+    # (air absorption) faster.
+    t_n = K['t_n'] * rng.lognormal(0.0, 0.3, len(r)) * np.sqrt(np.sqrt(np.maximum(energy, 0.05)))
+    t_n *= 1.0 + K['t_grow'] * np.log10(r / 300.0).clip(0.0, None)
+    rise = np.minimum(K['rise0'] * (r / 300.0) ** K['rise_exp'], 0.35 * t_n)
+
+    # stereo: each pulse comes from its own bearing
+    bearing = np.sin(np.arctan2(rel[:, 0], rel[:, 1]))
+    g_l = np.sqrt(0.5 * (1.0 - 0.85 * bearing))
+    g_r = np.sqrt(0.5 * (1.0 + 0.85 * bearing))
+
+    left = np.zeros(n)
+    right = np.zeros(n)
+    keep = t_arr < dur
+    t_arr, t_n, rise, amp, g_l, g_r = t_arr[keep], t_n[keep], rise[keep], amp[keep], g_l[keep], g_r[keep]
+    width = int(np.ceil((t_n.max() + rise.max()) * sr)) + 2 if len(t_arr) else 0
+    for c0 in range(0, len(t_arr), 400):
+        sl = slice(c0, c0 + 400)
+        i0 = np.floor((t_arr[sl] - 0.5 * rise[sl]) * sr).astype(int)
+        idx = i0[:, None] + np.arange(width)[None, :]
+        u = idx / sr - t_arr[sl][:, None]  # time since the pulse's front
+        T = t_n[sl][:, None]
+        tr = rise[sl][:, None]
+        front = 0.5 - 0.5 * np.cos(np.pi * np.clip(u / tr + 0.5, 0.0, 1.0))
+        back = 0.5 + 0.5 * np.cos(np.pi * np.clip((u - T) / tr + 0.5, 0.0, 1.0))
+        wave = front * back * (1.0 - 2.0 * np.clip(u, 0.0, None) / T) * amp[sl][:, None]
+        ok = (idx >= 0) & (idx < n)
+        left += np.bincount(idx[ok], weights=(wave * g_l[sl][:, None])[ok], minlength=n)[:n]
+        right += np.bincount(idx[ok], weights=(wave * g_r[sl][:, None])[ok], minlength=n)[:n]
+
+    # Ground, terrain and cloud echoes: a few late, darker copies.
+    # Reverberation from terrain, clouds and the boundary layer: a dense,
+    # diffuse tail (not discrete taps) whose highs die faster than its lows,
+    # independent per ear.
+    n_ir = min(n, int(2.5 * sr))
+    if n_ir > int(0.2 * sr) and K['echo'] > 0.0:
+        ti = np.arange(n_ir) / sr
+        onset_ir = np.clip((ti - 0.05) / 0.25, 0.0, 1.0) ** 2
+        for ch in (left, right):
+            w = crng.standard_normal(n_ir)
+            lo = bandlimit(w, sr, None, 350.0, order=2) * np.exp(-6.91 * ti / K['t60_lo'])
+            hi = bandlimit(w, sr, 350.0, None, order=2) * np.exp(-6.91 * ti / K['t60_hi'])
+            ir = (lo + 0.6 * hi) * onset_ir
+            ir *= K['echo'] / np.sqrt(np.sum(ir ** 2) + 1e-12)
+            ch += _fftconv(ch, ir, n)
+
+    if K['hp'] > 25.0:  # what a microphone and a speaker keep of it
+        left = bandlimit(left, sr, K['hp'], None, order=2)
+        right = bandlimit(right, sr, K['hp'], None, order=2)
+    if K['comp'] > 0.0:  # the ear hears the roll, not just the loudest clap
+        env = np.sqrt(_fftconv(left ** 2 + right ** 2, np.hanning(int(0.08 * sr)) / (0.04 * sr), n) + 1e-12)
+        g = (env / env.max() + 1e-4) ** (-K['comp'])
+        left, right = left * g, right * g
+    tail = _fade_out(n, sr, min(0.25 * dur, 1.2))
+    level = 1.0 - 0.35 * cls / 3.0  # distance costs level
+    return left * tail * level, right * tail * level
 
 
 # -- door slam ---------------------------------------------------------------
