@@ -13,6 +13,8 @@ model is deterministic.
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 
 from ..score import Event
@@ -98,12 +100,12 @@ PARAMS: dict[str, dict[str, float]] = {
     "frog": dict(width=0.2, reverb=0.16, reverb_decay=0.8),
     "owl": dict(width=0.2, reverb=0.3, reverb_decay=1.4),
     "glass_break": dict(width=0.6, reverb=0.2, reverb_decay=0.6),
-    "clock_tick": dict(width=0.0, reverb=0.12, reverb_decay=0.5),
+    "clock_tick": dict(width=0.0, reverb=0.06, reverb_decay=0.4),
     "phone_ring": dict(width=0.2, reverb=0.16, reverb_decay=0.5),
-    "keyboard_typing": dict(width=0.3, reverb=0.08, reverb_decay=0.4),
-    "mouse_click": dict(width=0.0, reverb=0.05, reverb_decay=0.3),
-    "camera_shutter": dict(width=0.1, reverb=0.08, reverb_decay=0.4),
-    "paper_rustle": dict(width=0.4, reverb=0.08, reverb_decay=0.4),
+    "keyboard_typing": dict(width=0.3, reverb=0.05, reverb_decay=0.3),
+    "mouse_click": dict(width=0.0, reverb=0.03, reverb_decay=0.25),
+    "camera_shutter": dict(width=0.1, reverb=0.05, reverb_decay=0.3),
+    "paper_rustle": dict(width=0.4, reverb=0.06, reverb_decay=0.3),
     "cork_pop": dict(width=0.2, reverb=0.14, reverb_decay=0.5),
     "coin_drop": dict(width=0.2, reverb=0.16, reverb_decay=0.6),
     "metal_clang": dict(width=0.4, reverb=0.2, reverb_decay=1.0),
@@ -1181,29 +1183,51 @@ def _glass_break(ev, sr, rng, crng, p, seed):
 
 
 def _clock_tick(ev, sr, rng, crng, p, seed):
-    """The escapement: each tick is a tiny metal click (high modes) knocking
-    the case (a wooden body). Tick and tock differ a little."""
+    """The escapement: an escape-wheel tooth landing on a steel pallet is a
+    cluster of two or three tiny metal impacts a few ms apart (lock, impulse,
+    drop), broadband and dead within ~10 ms. The brass plates of the
+    movement ring on briefly with a few high, sparse partials, and the case
+    the movement is screwed into radiates most of it, so the tick sits in
+    the 0.5-2 kHz range (as in real recordings) rather than up at 8 kHz. Tick and tock come from the two pallets, so each has
+    its own fixed character, and a clock is rarely in perfect beat. A pocket
+    watch beats 5 times a second with almost no case; a grandfather clock
+    beats once a second into a tall wooden case."""
     n = _n(ev, sr)
     dur = n / sr
     kind = seed % 3
-    period = (1.0, 0.2, 2.0)[kind]
-    hi = (crng.uniform(2600, 3400), crng.uniform(4200, 5200), crng.uniform(1800, 2300))[kind]
-    case = (crng.uniform(600, 900), crng.uniform(1500, 2000), crng.uniform(220, 320))[kind]
-    case_t = (0.05, 0.02, 0.18)[kind]
-    left = np.zeros(n)
-    tm = 0.01
+    period = (1.0, 0.2, 1.0)[kind]
+    band = ((1000.0, 6500.0), (2000.0, 8000.0), (800.0, 5500.0))[kind]
+    t60 = (0.012, 0.006, 0.015)[kind]
+    # case: (lo, hi, t60, modes, level against the escapement)
+    case = ((400.0, 2200.0, 0.02, 10, 0.8), (1200.0, 4000.0, 0.006, 6, 0.2), (150.0, 1500.0, 0.05, 12, 1.0))[kind]
+    # the movement's plates: (lo, hi, t60, partials, level)
+    plate = ((2500.0, 8000.0, 0.05, 7, 0.3), (3500.0, 8500.0, 0.03, 5, 0.3), (1800.0, 6500.0, 0.05, 8, 0.2))[kind]
+    gap = ((0.002, 0.01), (0.0006, 0.0016), (0.003, 0.012))[kind]
+    movement = int(crng.integers(1 << 31))
+    beat = crng.uniform(0.0, 0.04) if kind != 1 else 0.0  # out of beat
+    pal = [int(crng.integers(1 << 31)) for _ in range(2)]
+    out = np.zeros(n)
+    tm = crng.uniform(0.005, 0.03)
     i = 0
-    while tm < dur - 0.03:
+    while tm < dur - 0.04:
+        tock = i % 2
         at = int(tm * sr)
-        tock = i % 2 == 1
-        f = hi * (0.86 if tock else 1.0)
-        click = _strike(n, sr, at, (f, f * 1.53, f * 2.21), (0.012, 0.009, 0.006), (1, 0.6, 0.4), rng, 0.00015, noise=0.3)
-        body = _strike(n, sr, at, (case * (0.9 if tock else 1.0), case * 1.7), (case_t, case_t * 0.6), (1, 0.4), rng, 0.0006)
-        a = crng.uniform(0.9, 1.0) * (0.85 if tock else 1.0)
-        left += a * (_norm(click) + (0.5, 0.25, 0.9)[kind] * _norm(body))
-        tm += period / (2 if kind == 2 else 1) * (1.0 if kind != 0 else crng.uniform(0.995, 1.005))
+        lag = 0.0
+        for j in range(2 if kind == 1 else 3):
+            g = _desk_hit(sr, rng, 0.012 if kind == 1 else 0.02, band, t60, 16, contact=0.00006,
+                          noise=1.5, noise_tau=0.002, mseed=pal[tock] + j)
+            a = (1.0, crng.uniform(0.3, 0.55), crng.uniform(0.12, 0.3))[j]
+            _desk_add(out, at + int(lag * sr), g, a * (0.8 if tock else 1.0))
+            lag += crng.uniform(*gap)
+        cg = _desk_hit(sr, rng, case[2] * 3.0, case[:2], case[2], case[3], contact=0.0004,
+                       noise=0.3, noise_tau=0.001, mseed=pal[tock] + 9)
+        _desk_add(out, at, cg, case[4] * crng.uniform(0.9, 1.0))
+        pg = _desk_hit(sr, rng, plate[2] * 2.5, plate[:2], plate[2], plate[3], contact=0.0001,
+                       noise=0.5, noise_tau=0.0003, mseed=movement + tock)
+        _desk_add(out, at, pg, plate[4] * crng.uniform(0.85, 1.0))
+        tm += period * crng.uniform(0.998, 1.002) * (1.0 + (beat if tock else -beat))
         i += 1
-    return left, left
+    return out, out
 
 
 def _bell_ring(n, sr, at, length, f, rng, crng, rate=20.0, partials=None):
@@ -1316,119 +1340,323 @@ def _phone_ring(ev, sr, rng, crng, p, seed):
     return mono, _decorrelate(mono, sr, crng)
 
 
-def _key(n, sr, at, rng, crng, kind, heavy=False):
-    """One keystroke: the cap clicking down (high plastic modes), bottoming
-    out (a duller thock), and the release a little later."""
-    if kind == 2:  # typewriter: a type bar hits the platen
-        f = crng.uniform(1600, 2400)
-        hit = _strike(n, sr, at, (f, f * 1.8, f * 2.9, 450.0), (0.03, 0.02, 0.012, 0.05), (1, 0.6, 0.3, 0.3), rng, 0.0003, noise=0.6)
-        return hit
-    f = crng.uniform(2500, 4200) if kind == 1 else crng.uniform(2400, 3800)
-    click = _strike(n, sr, at, (f, f * 1.6, f * 2.3), (0.012, 0.008, 0.005), (1, 0.5, 0.3), rng, 0.0002, noise=0.4)
-    thock_f = crng.uniform(250, 420) * (0.75 if heavy else 1.0)
-    thock = _strike(n, sr, at + int(crng.uniform(0.004, 0.009) * sr), (thock_f, thock_f * 2.2, thock_f * 3.6),
-                    (0.03, 0.02, 0.012), (1, 0.6, 0.3), rng, 0.0012)
-    rel_at = at + int(crng.uniform(0.07, 0.13) * sr)
-    rel = _strike(n, sr, rel_at, (f * 1.1, f * 1.7), (0.008, 0.005), (1, 0.4), rng, 0.0002, noise=0.3)
-    c = (1.0, 1.3)[kind]
-    return c * _norm(click) + (0.7 if heavy else 0.3) * _norm(thock) + 0.35 * c * _norm(rel)
+# -- desk sounds: small, fast, close-miked mechanical transients --------------
+#
+# A clock escapement, a key switch, a mouse micro-switch, a shutter: each is a
+# small stiff part hitting another in well under a millisecond. What reaches
+# the mic is a broadband crack that dies in a few milliseconds (many dense,
+# heavily damped modes, not a few clean ones: clean modes ringing for tens of
+# ms are what makes a click read as a wood block), then a weaker, slightly
+# longer knock of whatever housing it sits in. These helpers build one hit on
+# a short local buffer and drop it into the output, so a few hundred hits
+# stay cheap (no full-length FFT per hit).
+
+
+def _desk_ir(sr, mrng, k, band, t60, count):
+    """`count` random damped modes, log-spread over `band` (Hz), t60 ~ `t60` s,
+    peak 1."""
+    t = np.arange(k) / sr
+    fs = np.exp(mrng.uniform(np.log(band[0]), np.log(band[1]), count))
+    ds = t60 * mrng.uniform(0.5, 1.5, count)
+    gs = mrng.uniform(0.4, 1.0, count)
+    ph = mrng.uniform(0.0, TAU, count)
+    return _norm((gs[:, None] * np.exp(-LN1000 * t[None, :] / ds[:, None])
+                  * np.sin(TAU * fs[:, None] * t[None, :] + ph[:, None])).sum(0))
+
+
+@functools.lru_cache(maxsize=128)
+def _desk_ir_fixed(sr, mseed, k, band, t60, count):
+    """`_desk_ir` for a part that is struck again and again (a pallet, a key,
+    a switch): the same modes every time, computed once."""
+    ir = _desk_ir(sr, np.random.default_rng(mseed), k, band, t60, count)
+    ir.flags.writeable = False
+    return ir
+
+
+def _desk_noise(rng, n, sr, lo, hi):
+    """Band-limited noise, peak 1, on a power-of-two FFT (noise has no edges
+    to wrap, and an awkward length makes `bandlimit` slow)."""
+    m = 1 << max(4, (n - 1).bit_length())
+    f = np.fft.rfftfreq(m, 1.0 / sr)
+    mag = 1.0 / np.sqrt(1.0 + (f / hi) ** 4) / np.sqrt(1.0 + (np.maximum(f, 1e-9) / lo) ** -4)
+    return _norm(np.fft.irfft(np.fft.rfft(rng.standard_normal(m)) * mag, m)[:n])
+
+
+def _desk_hit(sr, rng, length, band, t60, count=14, contact=0.00008, noise=1.0, noise_tau=0.0006,
+              mseed=None, body=None):
+    """One small impact, `length` s long, peak 1: a contact pulse plus a
+    noise crack into `count` damped modes over `band`. `mseed` fixes the
+    modes (the same part struck again sounds the same; only the crack
+    varies); `body` = (lo, hi, t60, count, gain) adds the housing it is
+    mounted in."""
+    k = max(32, int(length * sr))
+    t = np.arange(k) / sr
+    exc = np.zeros(k)
+    c = max(2, int(contact * sr))
+    exc[:c] = np.sin(np.pi * (np.arange(c) + 0.5) / c)
+    if noise > 0:
+        exc += noise * rng.standard_normal(k) * np.exp(-t / noise_tau)
+    band = (float(band[0]), float(band[1]))
+    if mseed is None:
+        ir = _desk_ir(sr, rng, k, band, t60, count)
+    else:
+        ir = _desk_ir_fixed(sr, int(mseed), k, band, float(t60), count)
+    if body is not None:
+        blo, bhi, bt60, bcount, bgain = body
+        ir = ir + bgain * _desk_ir_fixed(sr, int(mseed or 0) + 1, k, (float(blo), float(bhi)), float(bt60), bcount)
+    m = 1 << (2 * k - 1).bit_length()
+    y = np.fft.irfft(np.fft.rfft(exc, m) * np.fft.rfft(ir, m), m)[:k]
+    f = max(2, k // 6)  # the local buffer ends on zero
+    y[-f:] *= 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, f))
+    return _norm(y)
+
+
+def _desk_add(out, at, g, a=1.0):
+    """Mix the local buffer `g` into `out` from sample `at` (clipped at the end)."""
+    if 0 <= at < len(out):
+        k = min(len(g), len(out) - at)
+        out[at : at + k] += a * g[:k]
+
+
+def _desk_swish(rng, n, sr, env, lo, hi):
+    """Friction noise (a thumb on a lever, paper sliding) following `env`."""
+    return _desk_noise(rng, n, sr, lo, hi) * env
 
 
 def _keyboard_typing(ev, sr, rng, crng, p, seed):
+    """Typing: each keystroke is a keycap snapping down (a bright plastic
+    click, a few ms), bottoming out on the plate a moment later (a duller,
+    lower knock of the keyboard deck) and, when the finger lifts 60-120 ms
+    later, a softer return click. Keys across the board differ a little. The
+    rhythm is human: quick runs inside a word, the space bar louder and lower
+    with its stabiliser rattle, and pauses. A typewriter is slower and much
+    louder: a type bar slaps the platen through the paper, the carriage
+    escapement steps after it, and the margin bell rings at the end of a
+    line."""
     n = _n(ev, sr)
     dur = n / sr
     kind = seed % 3
     left = np.zeros(n)
     right = np.zeros(n)
-    tm = 0.01
-    word = int(crng.integers(3, 8))
+    keys = [int(crng.integers(1 << 31)) for _ in range(8)]  # key positions on the deck
+    deck = int(crng.integers(1 << 31))
+    # click band, click t60, click buffer, deck (lo, hi, t60, modes), deck level, release level, median gap
+    cl_band, cl_t60, cl_len, deck_b, deck_lvl, rel_lvl, med = (
+        ((1800.0, 8000.0), 0.0025, 0.012, (300.0, 2200.0, 0.012, 10), 0.5, 0.35, 0.13),  # laptop scissor keys
+        ((2000.0, 9000.0), 0.003, 0.015, (180.0, 1500.0, 0.02, 12), 0.85, 0.55, 0.12),  # mechanical
+        ((900.0, 7000.0), 0.006, 0.03, (120.0, 1100.0, 0.05, 14), 1.0, 0.3, 0.2),  # typewriter
+    )[kind]
+    line = int(crng.integers(14, 30))
+    tm = crng.uniform(0.01, 0.06)
+    word = int(crng.integers(2, 9))
     i = 0
-    while tm < dur - 0.15:
+    chars = 0
+    while tm < dur - 0.12:
         space = i == word
-        k = _key(n, sr, int(tm * sr), rng, crng, kind, heavy=space)
-        a = crng.uniform(0.6, 1.0)
-        w = 0.5 + crng.uniform(-0.25, 0.25)
-        left += a * k * (1 - w)
-        right += a * k * w
+        at = int(tm * sr)
+        a = crng.uniform(0.55, 1.0) * (1.25 if space else 1.0)
+        w = 0.5 + (0.0 if space else crng.uniform(-0.3, 0.3))
+        stroke = np.zeros(int(0.2 * sr))
+        esc = _desk_hit(sr, rng, 0.02, (1500.0, 8000.0), 0.004, 12, noise=1.2, noise_tau=0.0004,
+                        mseed=deck + 1) if kind == 2 else None
         if kind == 2 and space:
-            # carriage: a ratchet run (rarely) or a small bell
-            pass
+            _desk_add(stroke, 0, esc, 0.45)  # no type bar: only the carriage steps
+        else:
+            mr = keys[int(crng.integers(0, 8))] + (77 if space else 0)
+            band = (cl_band[0] * (0.6 if space else 1.0), cl_band[1] * (0.85 if space else 1.0))
+            click = _desk_hit(sr, rng, cl_len, band, cl_t60, 16, noise=1.5, noise_tau=0.0005,
+                              mseed=mr)
+            # the cap scrapes its guide and the switch leaf chatters: a few
+            # weaker contacts smeared over the next 4-15 ms
+            for _ in range(int(crng.integers(1, 4))):
+                _desk_add(stroke, int(crng.uniform(0.001, 0.008) * sr) if kind < 2 else int(crng.uniform(0.001, 0.004) * sr),
+                          _desk_hit(sr, rng, cl_len, band, cl_t60, 12, noise=1.5, noise_tau=0.0008, mseed=mr + 3),
+                          crng.uniform(0.25, 0.6))
+            dk = _desk_hit(sr, rng, deck_b[2] * 3.0, (deck_b[0] * (0.7 if space else 1.0), deck_b[1]), deck_b[2],
+                           deck_b[3], contact=0.0006, noise=0.6, noise_tau=0.0015,
+                           mseed=deck + (5 if space else 0))
+            bot = int(crng.uniform(0.002, 0.007) * sr) if kind < 2 else int(crng.uniform(0.0, 0.002) * sr)
+            _desk_add(stroke, 0, click, 0.8 if kind == 0 else 1.0)
+            _desk_add(stroke, bot, dk, deck_lvl * (1.3 if space else 1.0))
+            if space and kind < 2:  # the stabiliser wire rattles a few ms later
+                _desk_add(stroke, bot + int(crng.uniform(0.004, 0.009) * sr),
+                          _desk_hit(sr, rng, 0.01, (2500.0, 8000.0), 0.002, 10, noise=1.0, noise_tau=0.0003), 0.35)
+            if kind == 2:  # the carriage escapement steps after the slug lands
+                _desk_add(stroke, bot + int(crng.uniform(0.018, 0.03) * sr), esc, 0.4)
+            rel = int(crng.uniform(0.06, 0.12) * sr)
+            _desk_add(stroke, rel, _desk_hit(sr, rng, cl_len, (band[0] * 1.2, band[1]), cl_t60 * 0.8, 12,
+                                             noise=1.0, noise_tau=0.0004, mseed=mr),
+                      rel_lvl * crng.uniform(0.6, 1.0))
+        _desk_add(left, at, stroke, a * (1 - w))
+        _desk_add(right, at, stroke, a * w)
+        chars += 1
+        if kind == 2 and chars == line and tm < dur - 0.8:
+            # end of line: the margin bell (a small struck bell: it does ring)
+            fb = crng.uniform(2200.0, 2600.0)
+            b = _norm(_strike(n, sr, at + int(0.05 * sr), (fb, fb * 2.76), (0.6, 0.12),
+                              (1.0, 0.25), rng, 0.0002))
+            left += 0.2 * b
+            right += 0.2 * b
         if space:
-            word = int(crng.integers(3, 8))
+            word = int(crng.integers(2, 9))
             i = 0
-            tm += crng.uniform(0.18, 0.35)
+            tm += crng.uniform(0.12, 0.3) * med / 0.12
         else:
             i += 1
-            tm += float(np.clip(crng.lognormal(np.log(0.12 if kind < 2 else 0.17), 0.35), 0.06, 0.4))
-        if crng.random() < 0.04:
-            tm += crng.uniform(0.4, 0.9)  # a pause to think
+            tm += float(np.clip(crng.lognormal(np.log(med), 0.45), 0.045, 0.5))
+        if crng.random() < 0.05:
+            tm += crng.uniform(0.35, 1.0)  # a pause to think
     return left, right
 
 
 def _mouse_click(ev, sr, rng, crng, p, seed):
+    """A mouse button: the finger pushes the plastic lever onto a tiny
+    snap-action micro-switch, whose spring flips with a sharp metal snap
+    (contact and a bounce within a millisecond) and the shell knocks once;
+    the release 50-100 ms later is the same snap, softer. The whole click is
+    over in a few ms: bright, dry, tiny."""
     n = _n(ev, sr)
-    mono = np.zeros(n)
-    times = (0.005,) if seed % 2 == 0 else (0.005, 0.005 + crng.uniform(0.12, 0.17))
-    for tm in times:
-        at = int(tm * sr)
-        f = crng.uniform(2800, 3600)
-        press = _strike(n, sr, at, (f, f * 1.45, f * 2.1, 900.0), (0.008, 0.006, 0.004, 0.012), (1, 0.6, 0.3, 0.5), rng, 0.00015, noise=0.3)
-        rel = _strike(n, sr, at + int(crng.uniform(0.06, 0.09) * sr), (f * 1.12, f * 1.6, 1000.0), (0.006, 0.004, 0.01), (1, 0.4, 0.4), rng, 0.00015, noise=0.3)
-        mono += _norm(press) + 0.45 * _norm(rel)
-    return mono, mono
-
-
-def _shutter_once(n, sr, at, rng, crng, film=False):
-    """Mirror up (a clack), the curtains (two quick ticks), mirror down."""
     out = np.zeros(n)
-    f = crng.uniform(1500, 2400)
-    for off, a, ff in ((0.0, 1.0, f), (0.018, 0.55, f * 1.7), (0.03 + crng.uniform(0.0, 0.02), 0.5, f * 1.8), (0.075, 0.9, f * 0.85)):
-        out += a * _strike(n, sr, at + int(off * sr), (ff, ff * 1.55, ff * 2.4, 420.0), (0.02, 0.014, 0.008, 0.04),
-                           (1, 0.5, 0.3, 0.6), rng, 0.0003, noise=0.5)
-    if film:
-        # wind-on lever: a ratchet of small clicks
-        st = at + int(0.35 * sr)
-        for j in range(14):
-            out += 0.25 * _strike(n, sr, st + int(j * 0.016 * sr), (3200.0 * crng.uniform(0.95, 1.05), 5100.0), (0.006, 0.004), (1, 0.4), rng, 0.0002, noise=0.4)
-    return out
+    sw = int(crng.integers(1 << 31))  # one switch, one shell
+    shell = int(crng.integers(1 << 31))
+    presses = [0.004]
+    if seed % 2 == 1:
+        presses.append(0.004 + crng.uniform(0.11, 0.16))
+    for tm in presses:
+        hold = crng.uniform(0.06, 0.1) if seed % 2 == 0 else crng.uniform(0.045, 0.07)
+        for up, (rel, lvl) in enumerate(((0.0, 1.0), (hold, 0.55))):
+            at = int((tm + rel) * sr)
+            snap = _desk_hit(sr, rng, 0.008, (2500.0, 9500.0), 0.0018, 16, contact=0.00005, noise=1.5,
+                             noise_tau=0.00025, mseed=sw + up)
+            body = _desk_hit(sr, rng, 0.02, (900.0, 3500.0), 0.005, 10, contact=0.0003, noise=0.4,
+                             noise_tau=0.0008, mseed=shell + up)
+            a = lvl * crng.uniform(0.85, 1.0)
+            _desk_add(out, at, snap, a)
+            _desk_add(out, at + int(crng.uniform(0.0003, 0.0009) * sr), snap, 0.4 * a)
+            _desk_add(out, at, body, (0.45 if up == 0 else 0.25) * a)
+    return out, out
 
 
 def _camera_shutter(ev, sr, rng, crng, p, seed):
+    """A camera firing. A DSLR is two mechanical clacks: the mirror flips up
+    and slaps its stop as the first curtain runs, then the second curtain
+    closes and the mirror drops back (a few tens of ms later, a touch
+    deeper), and the motor recocks the shutter with a short geared whirr. In
+    burst the cycle repeats ~7 times a second. A film camera's focal-plane
+    shutter is a lighter double click; the wind-on lever then drags a ratchet
+    through its stroke and springs back."""
     n = _n(ev, sr)
     dur = n / sr
     kind = seed % 3
-    mono = np.zeros(n)
+    out = np.zeros(n)
+    mech = int(crng.integers(1 << 31))
+    body = (300.0, 2500.0, 0.012, 12, 0.7)
+
+    def clack(at, a, which, bright=1.0):
+        g = _desk_hit(sr, rng, 0.035, (1200.0 * bright, 9000.0), 0.004, 18, contact=0.00015, noise=1.5,
+                      noise_tau=0.0006, mseed=mech + which, body=body)
+        _desk_add(out, at, g, a)
+        _desk_add(out, at + int(crng.uniform(0.002, 0.005) * sr), g, 0.3 * a)  # it bounces off its stop
+
+    def whirr(at, length):
+        k = int(length * sr)
+        if at >= n or k < 8:
+            return
+        u = np.arange(k) / k
+        env = np.sin(np.pi * u) ** 0.6
+        # gear mesh: noise roughly modulated at 160-260 Hz (too irregular to buzz)
+        mod = 0.6 + 0.4 * _smooth(rng, k, sr, crng.uniform(160.0, 260.0))
+        w = _desk_noise(rng, k, sr, 500.0, 4500.0) * mod * env
+        _desk_add(out, at, _norm(w), 0.18)
+
     if kind == 1:
-        tm = 0.005
-        while tm < dur - 0.12:
-            mono += _shutter_once(n, sr, int(tm * sr), rng, crng)
-            tm += 1 / 8.0
+        tm = 0.004
+        fps = crng.uniform(6.0, 8.0)
+        while tm < dur - 0.13:
+            at = int(tm * sr)
+            sp = crng.uniform(0.035, 0.05)
+            clack(at, crng.uniform(0.9, 1.0), 0)
+            clack(at + int(sp * sr), crng.uniform(0.8, 0.9), 1, 0.8)
+            whirr(at + int((sp + 0.006) * sr), crng.uniform(0.06, 0.08))
+            tm += 1.0 / fps * crng.uniform(0.99, 1.01)
+    elif kind == 0:
+        sp = crng.uniform(0.04, 0.07)
+        clack(int(0.004 * sr), 1.0, 0)
+        clack(int((0.004 + sp) * sr), 0.85, 1, 0.8)
+        whirr(int((0.01 + sp) * sr), crng.uniform(0.07, 0.1))
     else:
-        mono += _shutter_once(n, sr, int(0.005 * sr), rng, crng, film=kind == 2)
-    return mono, _decorrelate(mono, sr, crng, taps=3, span=0.006)
+        sp = crng.uniform(0.012, 0.025)
+        clack(int(0.004 * sr), 0.9, 0, 1.4)
+        clack(int((0.004 + sp) * sr), 0.6, 1, 1.4)
+        # wind-on: ratchet teeth at an uneven pace (the thumb speeds up and
+        # slows down), a friction drag, then the lever springs home
+        st = 0.004 + crng.uniform(0.18, 0.26)
+        span = min(crng.uniform(0.2, 0.28), max(0.05, dur - st - 0.08))
+        tt = st
+        while tt < st + span:
+            u = (tt - st) / span
+            _desk_add(out, int(tt * sr), _desk_hit(sr, rng, 0.01, (2500.0, 9000.0), 0.0018, 10, noise=1.0,
+                                                    noise_tau=0.0003), 0.22 * crng.uniform(0.6, 1.0))
+            tt += crng.uniform(0.007, 0.02) * (1.2 - 0.6 * np.sin(np.pi * u))
+        a0, k = int(st * sr), int(span * sr)
+        if a0 < n:
+            env = np.zeros(n)
+            m = min(k, n - a0)
+            env[a0 : a0 + m] = np.sin(np.pi * np.linspace(0, 1, m))
+            out += 0.07 * _desk_swish(rng, n, sr, env, 800.0, 6000.0)
+        clack(int((st + span + crng.uniform(0.01, 0.03)) * sr), 0.35, 2, 1.6)
+    return out, _decorrelate(out, sr, crng, taps=3, span=0.006)
 
 
 def _paper_rustle(ev, sr, rng, crng, p, seed):
-    """Paper: many small crackles (the sheet buckling), denser while it is
-    handled, plus a soft broadband swish as it moves."""
+    """Paper crackles: a stiff sheet in the hands buckles in many small snaps
+    (each a crack a fraction of a ms long, of very uneven strength), in
+    gestures: a burst while the hands move, then a pause. Under the crackle
+    the surfaces slide (a soft swish) and a big flex makes the whole sheet
+    go "thwap" (a low, damped flutter). Handling a sheet is sparse, with
+    swishes and the odd flex; crumpling is dense, louder snaps that thin out
+    as the ball gets tight."""
     n = _n(ev, sr)
     dur = n / sr
     crumple = seed % 2 == 1
-    act = (0.25 + 0.75 * _smooth(crng, n, sr, 4.0 if crumple else 2.5)) * _fade_out(n, sr, 0.1)
-    rate = 900.0 if crumple else 350.0
+    t = np.arange(n) / sr
+    gest = []  # (start, length, intensity)
+    tm = crng.uniform(0.0, 0.08)
+    while tm < dur - 0.1:
+        ln = crng.uniform(0.25, 0.7) if crumple else crng.uniform(0.2, 0.6)
+        gest.append((tm, min(ln, dur - tm - 0.02), crng.uniform(0.5, 1.0)))
+        tm += ln + (crng.uniform(0.02, 0.15) if crumple else crng.uniform(0.1, 0.5))
+    act = np.zeros(n)
+    for g0, gl, gi in gest:
+        u = np.clip((t - g0) / max(gl, 1e-3), 0.0, 1.0)
+        act = np.maximum(act, gi * np.where((t >= g0) & (t <= g0 + gl), np.sin(np.pi * u) ** 0.7, 0.0))
+    if crumple:
+        act *= 1.0 - 0.45 * t / dur  # the ball tightens
 
-    def chan():
-        cnt = int(rate * dur)
-        tt = crng.uniform(0.0, dur, cnt)
-        amps = crng.pareto(2.5, cnt) * np.interp(tt, np.arange(n) / sr, act)
-        g = _grains(rng, n, tt, amps, sr)
-        crack = _ring(np.cumsum(g) * 0.02, (crng.uniform(1500, 2500), crng.uniform(3500, 4800)), (0.004, 0.003), (1, 0.6), sr)
-        crack = bandlimit(crack + 0.5 * g, sr, 600.0, 7000.0, order=4)
-        swish = _wash(rng, n, sr, 500.0, 4500.0) * act ** 2
-        return _norm(crack) + 0.35 * swish
+    def chan(r):
+        out = np.zeros(n)
+        cnt = int((650.0 if crumple else 140.0) * dur)
+        tt = r.uniform(0.0, dur, cnt)
+        tt = tt[r.random(cnt) < np.interp(tt, t, act) ** 1.5]
+        amps = np.minimum(r.pareto(1.8, len(tt)) + 0.15, 25.0)
+        # snap shapes by size: small ones bright and tiny, big ones lower and longer
+        shapes = [_desk_hit(sr, r, 0.006 + 0.002 * k, (r.uniform(900.0, 3000.0), 9500.0), 0.0008 + 0.0004 * k, 10,
+                            contact=0.00004, noise=2.0, noise_tau=0.00015 + 0.0001 * k) for k in range(6)]
+        rank = np.empty(len(tt), int)
+        rank[np.argsort(amps)] = np.arange(len(tt))
+        sign = r.choice((-1.0, 1.0), len(tt))
+        for j in range(len(tt)):
+            _desk_add(out, int(tt[j] * sr), shapes[min(5, 6 * rank[j] // max(1, len(tt)))], amps[j] * sign[j])
+        swish = _desk_swish(r, n, sr, act ** 2, 400.0, 5000.0)
+        flex = np.zeros(n)
+        for g0, gl, gi in gest:
+            if r.random() < (0.5 if crumple else 0.8):
+                fl = _desk_hit(sr, r, 0.12, (90.0, 450.0), 0.05, 8, contact=0.004, noise=0.5, noise_tau=0.01)
+                _desk_add(flex, int((g0 + r.uniform(0.0, 0.6) * gl) * sr), fl, gi)
+        return _norm(out) + (0.12 if crumple else 0.22) * swish + (0.15 if crumple else 0.3) * flex
 
-    a = _attack(n, sr, 0.0, 0.03)
-    return chan() * a, chan() * a
+    a = _attack(n, sr, 0.0, 0.01)
+    return chan(rng) * a, chan(np.random.default_rng(int(rng.integers(1 << 31)))) * a
 
 
 def _cork_pop(ev, sr, rng, crng, p, seed):
