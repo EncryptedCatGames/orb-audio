@@ -483,57 +483,117 @@ def _knock(ev: Event, sr: int, rng: np.random.Generator, crng: np.random.Generat
 # -- footsteps ---------------------------------------------------------------
 
 
+def _step_env(n: int, sr: int, at: float, rise: float, tau: float, length: float) -> tuple[int, np.ndarray]:
+    """A short envelope (raised-cosine rise, exponential fall), placed at `at`
+    s; returns (start sample, envelope) so it can be added in place."""
+    a = int(at * sr)
+    k = min(n - a, int(length * sr))
+    if a < 0 or k < 4:
+        return 0, np.zeros(0)
+    t = np.arange(k) / sr
+    e = np.exp(-t / tau)
+    r = min(k, max(2, int(rise * sr)))
+    e[:r] *= 0.5 - 0.5 * np.cos(np.pi * (np.arange(r) + 0.5) / r)
+    return a, e
+
+
 def _footsteps(ev: Event, sr: int, rng: np.random.Generator, crng: np.random.Generator, p: dict, seed: int):
+    """Someone walking: each step is a heel strike, the sole rolling down and
+    the ball of the foot landing 50-120 ms later, then a little scuff as it
+    pushes off. The floor is heavily damped, so a step is shaped noise, not a
+    ringing tone: a dull low thud (the body's weight into the floor), a
+    broadband slap of the sole, a hard heel's click on hard floors, the
+    friction of the sole, and on gravel the stones crunching under the whole
+    foot. Between footfalls the swinging leg's trousers brush past the
+    other leg. The cadence is a human walk (left and right not quite even, every
+    step a little different), and the room or street answers.
+    """
     n = max(1, int(ev.dur * sr))
     dur = n / sr
     surface = seed % 3  # 0 hard floor, 1 stone, 2 gravel
-    interval = (0.66, 0.54, 0.43)[(seed // 3) % 3] * crng.uniform(0.95, 1.05)
-    f_body = float(p["f0"]) * (1.15, 0.8, 0.9)[surface]
+    pace = (seed // 3) % 3  # slow, walk, brisk
+    interval = (0.62, 0.53, 0.44)[pace] * crng.uniform(0.95, 1.05)
+    limp = crng.uniform(-0.03, 0.03)  # left/right steps are not quite even
+    shoe_hard = (crng.uniform(0.6, 1.0), crng.uniform(0.5, 0.9), 0.3)[surface]
 
-    left = np.zeros(n)
-    right = np.zeros(n)
-    tm = 0.004
+    # Excitation envelopes per component, summed over the steps; each noise
+    # band is then filtered once over the whole clip.
+    e_thud, e_slap, e_click, e_scuff, e_crunch, e_cloth = (np.zeros(n) for _ in range(6))
+
+    def put(dst, at, rise, tau, length, a):
+        s, e = _step_env(n, sr, at, rise, tau, length)
+        dst[s : s + len(e)] += a * e
+
+    tm = crng.uniform(0.02, 0.12)
     step = 0
-    while tm < dur - 0.12 or step == 0:
+    while tm < dur - 0.2 or step == 0:
         foot = step % 2
-        a = db_to_gain(crng.uniform(-2.0, 1.0) - (0.8 if foot else 0.0))
-        heel_at = int(tm * sr)
-        toe_at = heel_at + int(crng.uniform(0.055, 0.095) * sr)
-        fb = f_body * (0.96 if foot else 1.03)
-        sig = np.zeros(n)
+        a = db_to_gain(crng.uniform(-2.5, 1.5) - (1.0 if foot else 0.0))
+        roll = crng.uniform(0.05, 0.11) * (1.15 if pace == 0 else 1.0)  # heel to ball
+        # heel strike: the body's weight lands on the heel
+        put(e_thud, tm, 0.002, 0.03, 0.18, a)
+        put(e_slap, tm, 0.002, 0.022, 0.12, a)
+        put(e_click, tm, 0.0004, 0.002, 0.015, a * shoe_hard)
+        # the sole rolls down and the ball lands, much softer: the weight
+        # is already on the foot
+        b = a * crng.uniform(0.2, 0.35)
+        put(e_thud, tm + roll, 0.003, 0.014, 0.1, 0.6 * b)
+        put(e_slap, tm + roll, 0.002, 0.014, 0.08, b)
+        # the sole rolling flat between the two: a soft, low smear
+        put(e_slap, tm + 0.01, roll * 0.6, roll * 0.5, roll * 1.2, 0.25 * a)
+        put(e_click, tm + roll, 0.0005, 0.002, 0.015, 0.35 * b * shoe_hard)
+        # friction: the sole sliding a little on landing and on push-off
+        put(e_scuff, tm + 0.004, 0.006, 0.025, 0.12, a * crng.uniform(0.2, 0.5))
+        put(e_scuff, tm + roll + crng.uniform(0.1, 0.18), 0.02, 0.03, 0.12, a * crng.uniform(0.1, 0.35))
         if surface == 2:
-            # gravel: the weight crushes stones, a burst of tiny grains
-            for start, length, g in ((heel_at, 0.11, 1.0), (toe_at, 0.08, 0.6)):
-                cnt = int(crng.integers(35, 70) * length / 0.1)
-                tt = start + (crng.gamma(2.0, length / 5.0, cnt) * sr).astype(int)
-                tt = tt[tt < n]
-                grains = np.zeros(n)
-                np.add.at(grains, tt, rng.standard_normal(len(tt)) * g)
-                sig += bandlimit(grains, sr, 700.0, 4800.0, order=4)
-            thump = _ring(_pulse(n, heel_at, int(0.012 * sr)), (fb, fb * 1.7), (0.05, 0.03), (1.0, 0.5), sr)
-            sig = _norm(sig) + 0.35 * _norm(thump)
-        else:
-            # heel: a soft force pulse rings the floor; the shoe scuffs
-            heel = _ring(_pulse(n, heel_at, int(0.008 * sr)), (fb, fb * 1.63, fb * 2.4, fb * 3.7),
-                         (0.06, 0.045, 0.03, 0.02), (1.0, 0.6, 0.4, 0.25), sr)
-            scuff_lo, scuff_hi = (450.0, 4200.0) if surface == 0 else (350.0, 4000.0)
-            scuff = bandlimit(_burst(rng, n, heel_at, int(0.05 * sr), 0.012, sr)
-                              + 0.5 * _burst(rng, n, toe_at, int(0.04 * sr), 0.008, sr),
-                              sr, scuff_lo, scuff_hi, order=4)
-            toe = _ring(_pulse(n, toe_at, int(0.004 * sr)), (fb * 1.9, fb * 3.1), (0.035, 0.02), (1.0, 0.5), sr)
-            click = np.zeros(n)
-            if surface == 0:  # a hard heel on a hard floor clicks
-                click = bandlimit(_burst(rng, n, heel_at, int(0.004 * sr), 0.001, sr), sr, 1800.0, 4800.0, order=4)
-            sig = _norm(heel) + 0.35 * _norm(toe) + (0.55 if surface == 1 else 0.4) * _norm(scuff) + 0.3 * _norm(click)
-        # the feet alternate a little left and right
-        w = 0.5 + (0.08 if foot else -0.08)
-        left += a * sig * (1.0 - w) * 2.0
-        right += a * sig * w * 2.0
+            put(e_crunch, tm, 0.002, 0.06, 0.25, a)
+            put(e_crunch, tm + roll, 0.004, 0.07, 0.25, 0.8 * b)
+        # the swing leg: trousers brushing past the standing leg mid-stride,
+        # a soft fabric swish between the footfalls
+        put(e_cloth, tm + 0.12 * interval, 0.35 * interval, 0.18 * interval, 0.7 * interval, a * crng.uniform(0.5, 1.0))
         step += 1
-        tm += interval * crng.uniform(0.93, 1.07)
+        tm += interval * crng.uniform(0.95, 1.05) * (1.0 + (limp if foot else -limp))
         if step > 64:
             break
-    return left, right
+
+    lo_f = (crng.uniform(110, 160), crng.uniform(130, 190), crng.uniform(90, 130))[surface]
+    thud = bandlimit(rng.standard_normal(n) * e_thud, sr, 45.0, lo_f * 2.2, order=2)
+    slap = bandlimit(rng.standard_normal(n) * e_slap, sr, (150.0, 200.0, 150.0)[surface], (1600.0, 2000.0, 1400.0)[surface], order=2)
+    click = bandlimit(rng.standard_normal(n) * e_click, sr, 1500.0, 4500.0, order=2)
+    scuff = bandlimit(rng.standard_normal(n) * e_scuff, sr, 400.0, 3000.0, order=2)
+    cloth = bandlimit(rng.standard_normal(n) * e_cloth, sr, 300.0, 2500.0, order=2)
+    mix = (
+        2.0 * thud / (np.abs(thud).max() + 1e-12)
+        + (0.8, 0.8, 0.4)[surface] * _norm(slap)
+        + (0.22, 0.3, 0.05)[surface] * _norm(click)
+        + (0.3, 0.35, 0.15)[surface] * _norm(scuff)
+        + 0.07 * _norm(cloth)
+    )
+    if surface == 2:
+        # gravel: stones crushed and shifting under the foot, a dense crackle
+        # of tiny impacts thinning out over a quarter second
+        cnt = int(1800 * dur)
+        tt = crng.uniform(0.0, dur, cnt)
+        idx = (tt * sr).astype(int)
+        amp = e_crunch[idx] * crng.uniform(0.2, 1.0, cnt) ** 2
+        grains = np.zeros(n)
+        np.add.at(grains, idx, amp * rng.choice((-1.0, 1.0), cnt))
+        crunch = bandlimit(grains, sr, 500.0, 6000.0, order=2) + 0.5 * bandlimit(grains, sr, 150.0, 900.0, order=2)
+        mix = mix + 1.2 * _norm(crunch)
+
+    # the room (hard floor), a stone passage, or open air over gravel
+    first, span, lvl = ((0.004, 0.03, 0.18), (0.006, 0.05, 0.22), (0.008, 0.03, 0.08))[surface]
+
+    def early() -> np.ndarray:
+        er = np.zeros(n)
+        for _ in range(10):
+            d = int(crng.uniform(first, first + span) * sr)
+            if d < n:
+                er[d:] += crng.uniform(0.4, 1.0) * lvl * mix[: n - d]
+        return bandlimit(er, sr, 80.0, 4000.0, order=2)
+
+    p["reverb"], p["reverb_decay"] = (0.3, 0.35, 0.15)[surface], (0.8, 1.0, 0.5)[surface]
+    return mix + early(), mix + early()
 
 
 # -- water drop --------------------------------------------------------------
