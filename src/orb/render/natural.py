@@ -774,24 +774,70 @@ def _paper_rustle(ev, sr, rng, crng, p, seed):
 
 
 def _cork_pop(ev, sr, rng, crng, p, seed):
-    """The cork leaves the neck: a Helmholtz 'pop' (the bottle's air rings,
-    a falling tone), a small puff, and with champagne a hiss and fizz."""
+    """A cork leaving a bottle. While the cork slides out it squeaks against
+    the glass (stick-slip, a few short rubbery chirps). When it clears the
+    lip, the pressure difference equalises in one pulse (air rushing in
+    behind a wine cork, gas rushing out of champagne) that sets the air in
+    the neck and headspace ringing as a Helmholtz resonator. The opening
+    grows as the cork leaves, so the pitch sweeps up over a few ms, and the
+    open neck radiates so well that the ring dies in a couple of cycles:
+    a hollow 'pop', not a struck tone. Champagne adds a sharper report, the
+    hiss of the gas gushing out of the neck, and the fizz of bubbles
+    bursting at the surface.
+    """
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
     champ = seed % 2 == 1
-    at = int(0.01 * sr)
-    f0 = crng.uniform(420, 620) * (0.8 if champ else 1.0)
-    f = f0 * (1.0 + 0.6 * np.exp(-t / 0.01))
-    tone = np.sin(TAU * np.cumsum(f) / sr) * _attack(n, sr, at / sr, 0.0015) * np.exp(-np.maximum(t - at / sr, 0) / 0.02)
-    puff = bandlimit(_burst(rng, n, at, int(0.06 * sr), 0.01, sr, rise=0.001), sr, 300.0, 5000.0, order=2)
-    mono = _norm(tone) + 0.6 * _norm(puff)
+    t0 = min(0.3 * dur, crng.uniform(0.12, 0.2) if not champ else crng.uniform(0.03, 0.06))
+    at = int(t0 * sr)
+    tt = np.maximum(t - t0, 0.0)
+    mono = np.zeros(n)
+
+    if not champ:
+        # the cork twisting out: two or three short rubbery squeaks
+        for _ in range(int(crng.integers(2, 4))):
+            s0 = crng.uniform(0.0, max(0.01, t0 - 0.06))
+            L = crng.uniform(0.02, 0.05)
+            k = int(L * sr)
+            a0 = int(s0 * sr)
+            if a0 + k >= n or k < 8:
+                continue
+            u = np.arange(k) / k
+            rate = crng.uniform(250, 450) * (1.0 + 0.3 * u)
+            ph = np.cumsum(rate) / sr
+            pul = np.zeros(k)
+            pul[np.nonzero(np.diff(np.floor(ph), prepend=0.0) > 0)[0]] = 1.0
+            sq = np.zeros(n)
+            sq[a0 : a0 + k] = pul * np.sin(np.pi * u) * crng.uniform(0.5, 1.0)
+            mono += 0.12 * _norm(_fftconv(sq, _modes_ir((1400.0, 2300.0, 3300.0), (0.006, 0.004, 0.003), (1.0, 0.6, 0.3), sr, n), n))
+
+    # the pulse: a smooth 0.5-1 ms push (a suck for wine), then the neck's
+    # air ringing with Q ~3 while the pitch rises as the opening clears
+    w = (0.0009, 0.0005)[champ]
+    push = _pulse(n, at, max(2, int(w * sr))) * (-1.0 if not champ else 1.0)
+    f0 = (crng.uniform(330, 480), crng.uniform(420, 600))[champ]
+    f = f0 * (0.6 + 0.4 * (1.0 - np.exp(-tt / 0.004)))
+    d = np.pi * f0 / 3.0
+    ring = np.sin(TAU * np.cumsum(f) / sr) * np.exp(-d * tt) * (t >= t0) * _attack(n, sr, t0, 0.0004)
+    pop = _norm(ring) + 0.5 * _norm(bandlimit(push, sr, 80.0, None, order=2))
+    # the rim and the cork's edge: a short dull tick of air turbulence
+    tick = bandlimit(_burst(rng, n, at, int(0.02 * sr), (0.002, 0.003)[champ], sr, rise=0.0004), sr, 300.0, 4000.0, order=2)
+    mono += pop + (0.35, 0.7)[champ] * _norm(tick)
+
     if champ:
-        hiss = _wash(rng, n, sr, 2000.0, 8000.0, order=4) * _attack(n, sr, at / sr, 0.01) * np.exp(-np.maximum(t - at / sr, 0) / 0.5)
-        cnt = int(250 * dur)
-        tt = at / sr + crng.exponential(dur * 0.4, cnt)
-        fizz = bandlimit(_grains(rng, n, tt, np.exp(-tt / dur), sr), sr, 2500.0, 8000.0, order=4)
-        mono = mono + 0.18 * hiss + 0.2 * _norm(fizz)
+        # gas gushing out of the neck: a hiss that swells in 20 ms and fades
+        # over half a second, darker as it slows
+        g_env = (1.0 - np.exp(-tt / 0.02)) * np.exp(-tt / crng.uniform(0.3, 0.5)) * (t >= t0)
+        gush = bandlimit(rng.standard_normal(n), sr, 1500.0, 7000.0, order=2) * g_env
+        # the fizz: thousands of tiny bubbles bursting at the surface, random
+        # clicks (each a small, very short burst) thinning out over seconds
+        rate = 2500.0 * np.exp(-tt / 0.9) * (t >= t0 + 0.02)
+        cnt = int(rate.sum() / sr) + 1
+        times = rng.choice(n, size=cnt, p=rate / rate.sum()) / sr
+        fz = _grains(rng, n, times, crng.uniform(0.1, 1.0, cnt) ** 2, sr)
+        fizz = bandlimit(fz, sr, 2500.0, 8000.0, order=2)
+        mono = 1.4 * mono + 0.22 * _norm(gush) + 0.18 * _norm(fizz)
     return mono, _decorrelate(mono, sr, crng)
 
 
@@ -1044,27 +1090,70 @@ def _clock_alarm(ev, sr, rng, crng, p, seed):
 # =============================================================================
 
 
+def _punch_reso(x, sr, f, q):
+    """`x` through one damped resonance at `f` Hz with quality `q` (a body
+    cavity, a skin patch): its impulse response convolved by FFT."""
+    n = len(x)
+    d = np.pi * f / q  # amplitude decay rate, 1/s
+    k = min(n, int(7.0 / d * sr) + 2)
+    t = np.arange(k) / sr
+    ir = np.exp(-d * t) * np.sin(TAU * f * t)
+    return _fftconv(x, ir, n)
+
+
 def _punch(ev, sr, rng, crng, p, seed):
-    """A film punch: a fist meeting a body. A low thump with a quick pitch
-    drop (the body), a meaty slap (skin and cloth), and on the heavy one a
-    whoosh of the swing before it lands."""
+    """A fist landing, the way film foley records it: the swish of the arm
+    and sleeve coming in, the skin slap of the knuckles (a sharp, bright,
+    mid-heavy crack), and the thud of the mass behind it, a low, heavily
+    damped boom of the torso or skull that is over in a tenth of a second.
+    A body punch is mostly thud; a face punch is mostly slap with the crunch
+    of bone and cartilage; the heavy movie punch is a long whoosh into a
+    bigger slap and a deep thud.
+    """
     n = _n(ev, sr)
     t = np.arange(n) / sr
-    kind = seed % 3
-    t0 = 0.12 if kind == 2 else 0.004
+    kind = seed % 3  # 0 body, 1 face, 2 heavy movie punch
+    t0 = (crng.uniform(0.07, 0.1), crng.uniform(0.06, 0.09), crng.uniform(0.17, 0.22))[kind]
+    t0 = min(t0, 0.3 * n / sr)
     at = int(t0 * sr)
-    f = (crng.uniform(70, 90), crng.uniform(95, 120), crng.uniform(55, 70))[kind]
-    tt = np.maximum(t - t0, 0.0)
-    fcur = f * (1.0 + 1.5 * np.exp(-tt / 0.012))
-    thump = np.sin(TAU * np.cumsum(fcur) / sr) * _attack(n, sr, t0, 0.002) * np.exp(-tt / (0.06 if kind != 2 else 0.1))
-    slap = bandlimit(_burst(rng, n, at, int(0.08 * sr), (0.012, 0.007, 0.016)[kind], sr, rise=0.0008), sr, 300.0, 5000.0, order=4)
-    crunch = bandlimit(_burst(rng, n, at + int(0.004 * sr), int(0.05 * sr), 0.01, sr), sr, 900.0, 4000.0, order=2)
-    mono = _norm(thump) * (1.0, 0.8, 1.2)[kind] + (0.6, 0.9, 0.7)[kind] * _norm(slap) + 0.25 * _norm(crunch)
-    if kind == 2:
-        sw = bandlimit(rng.standard_normal(n), sr, 300.0, 2500.0, order=2)
-        u = np.clip(t / t0, 0, 1)
-        mono += 0.25 * _norm(sw) * np.sin(np.pi * u / 2) ** 3 * (t < t0)
-    mono = saturate(_norm(mono) * 1.3, 1.4)
+
+    # 1. the swish: air and cloth torn past by the arm, a noise band whose
+    # centre climbs as the fist speeds up, cut off by the hit
+    u = np.clip(t / t0, 0.0, 1.0)
+    swish_env = np.sin(0.5 * np.pi * u) ** 3 * (t < t0)
+    noise = rng.standard_normal(n)
+    sw_lo = bandlimit(noise, sr, 250.0, 900.0, order=2)
+    sw_hi = bandlimit(noise, sr, 900.0, 3500.0, order=2)
+    swish = (sw_lo * (1.0 - u) + sw_hi * u) * swish_env
+
+    # 2. the slap: the knuckles meeting skin, a very short broadband crack
+    # coloured by the skin patch (a broad 1-2.5 kHz hump) and a lower smack
+    tau_s = (0.006, 0.004, 0.007)[kind]
+    crack = _burst(rng, n, at, int(0.05 * sr), tau_s, sr, rise=0.0003)
+    slap = (bandlimit(crack, sr, 500.0, 7000.0, order=2)
+            + 0.8 * _punch_reso(crack, sr, crng.uniform(1100, 2400), 3.0)
+            + 0.5 * _punch_reso(crack, sr, crng.uniform(450, 750), 2.5))
+
+    # 3. the thud: the force of the hit (a 4-8 ms push) into the body, a low
+    # resonance with Q ~2 plus the mass's broadband low knock
+    width = (0.007, 0.004, 0.009)[kind]
+    push = _pulse(n, at, int(width * sr))
+    f_body = (crng.uniform(85, 120), crng.uniform(150, 210), crng.uniform(60, 85))[kind]
+    thud = _punch_reso(push, sr, f_body, 1.8) + 0.6 * _punch_reso(push, sr, f_body * 2.3, 2.5)
+    knock = bandlimit(_burst(rng, n, at, int(0.12 * sr), (0.025, 0.015, 0.04)[kind], sr, rise=0.001), sr, 40.0, 400.0, order=2)
+    thud = _norm(thud) + 0.6 * _norm(knock)
+
+    lv = ((1.0, 0.6, 0.15), (0.7, 1.0, 0.12), (1.1, 0.9, 0.3))[kind]  # thud, slap, swish
+    mono = lv[0] * thud + lv[1] * _norm(slap) + lv[2] * _norm(swish)
+    if kind == 1:
+        # bone and cartilage: a few tiny cracks in the first 20 ms
+        cnt = int(crng.integers(5, 12))
+        cr = _grains(rng, n, t0 + crng.gamma(1.5, 0.004, cnt), crng.uniform(0.3, 1.0, cnt), sr)
+        mono += 0.25 * _norm(bandlimit(cr, sr, 1200.0, 5000.0, order=2))
+    # the cloth and the body settle: a short soft rustle after the hit
+    settle = bandlimit(_burst(rng, n, at + int(0.01 * sr), int(0.15 * sr), 0.04, sr, rise=0.01), sr, 400.0, 3000.0, order=2)
+    mono += 0.06 * _norm(settle)
+    mono = saturate(_norm(mono) * (1.2, 1.1, 1.6)[kind], 1.3)
     return mono, _decorrelate(mono, sr, crng, taps=3)
 
 
@@ -1106,32 +1195,98 @@ def _sword_clash(ev, sr, rng, crng, p, seed):
     return mono, _decorrelate(mono, sr, crng)
 
 
+def _gun_nwave(n, sr, at, length):
+    """A pressure N-wave: a near-instant rise (0.1 ms), a linear fall through
+    zero to the same negative peak over `length` s, and a 0.1 ms return."""
+    out = np.zeros(n)
+    k = max(4, int(length * sr))
+    r = max(2, int(0.0001 * sr))
+    if at + k + 2 * r >= n:
+        return out
+    up = 0.5 - 0.5 * np.cos(np.pi * (np.arange(r) + 0.5) / r)
+    out[at : at + r] = up
+    out[at + r : at + r + k] = np.linspace(1.0, -1.0, k)
+    out[at + r + k : at + 2 * r + k] = -up[::-1]
+    return out
+
+
+def _gun_blast(n, sr, at, length, decay):
+    """The muzzle blast: a Friedlander pulse (instant rise, decay through a
+    longer, shallower negative phase) of positive phase `length` s."""
+    out = np.zeros(n)
+    k = min(n - at, int((length * 6 + 0.002) * sr))
+    if k < 8:
+        return out
+    t = np.arange(k) / sr
+    r = max(2, int(0.00012 * sr))
+    w = (1.0 - t / length) * np.exp(-decay * t / length)
+    w[:r] *= 0.5 - 0.5 * np.cos(np.pi * (np.arange(r) + 0.5) / r)
+    out[at : at + k] = w
+    return out
+
+
 def _gunshot(ev, sr, rng, crng, p, seed):
-    """A game-style shot: the muzzle crack (a very short broadband N-wave),
-    a low boom, and the space answering (early reflections, a long tail)."""
+    """A real shot, recorded outdoors. The muzzle blast is a Friedlander
+    pressure pulse (a 0.1 ms rise, a 1-2 ms positive phase, a longer negative
+    one) with the turbulent roar of the propellant gas behind it; a rifle's
+    supersonic bullet adds its own sharp N-wave crack just ahead. The ground
+    answers within a few ms, then the surroundings: a handful of discrete,
+    darkened echoes (buildings, a treeline) over half a second and a diffuse
+    rolling tail that dies over 1-2 s. A distant shot loses its highs to the
+    air, so the crack is gone, the blast is a dull thud and the echoes and
+    the roll carry most of the energy."""
     n = _n(ev, sr)
+    dur = n / sr
     t = np.arange(n) / sr
-    kind = seed % 3
-    at = int(0.003 * sr)
-    dist = kind == 2
-    crack = bandlimit(_burst(rng, n, at, int(0.02 * sr), 0.0025, sr, rise=0.0004), sr, 500.0, 9000.0 if not dist else 3000.0, order=4)
-    f = (crng.uniform(80, 100), crng.uniform(60, 75), crng.uniform(50, 65))[kind]
-    tt = np.maximum(t - at / sr, 0)
-    boom = np.sin(TAU * np.cumsum(f * (1 + 1.2 * np.exp(-tt / 0.01))) / sr) * _attack(n, sr, at / sr, 0.002) * np.exp(-tt / (0.08 if kind == 0 else 0.12))
-    body = bandlimit(_burst(rng, n, at, int(0.5 * sr), (0.04, 0.07, 0.09)[kind], sr, rise=0.001), sr, 150.0, 3000.0, order=2)
-    mono = (0.3 if dist else 1.0) * _norm(crack) + 0.8 * _norm(boom) + 0.7 * _norm(body)
-    mono = saturate(_norm(mono) * 1.4, 1.8)
+    kind = seed % 3  # 0 pistol, 1 rifle, 2 distant
+    t0 = 0.004
+    at = int(t0 * sr)
 
-    def echo():
+    T = (crng.uniform(0.0011, 0.0016), crng.uniform(0.0016, 0.0024), crng.uniform(0.002, 0.003))[kind]
+    blast = _gun_blast(n, sr, at, T, 2.2)
+    # propellant gas: a roar of turbulent noise, loudest in the first 10 ms
+    tau = (0.012, 0.018, 0.02)[kind]
+    gas = bandlimit(_burst(rng, n, at, int(0.25 * sr), tau, sr, rise=0.0003), sr, 180.0, 6500.0, order=2)
+    src = _norm(blast) + (0.55, 0.5, 0.45)[kind] * _norm(gas)
+    if kind == 1:
+        # the bullet's crack arrives ahead of the muzzle blast
+        lead = int(crng.uniform(0.0015, 0.004) * sr)
+        crack = _gun_nwave(n, sr, at, crng.uniform(0.00025, 0.0004))
+        src = np.roll(src, lead) + 0.8 * crack
+    if kind == 2:
+        src = bandlimit(src, sr, 60.0, crng.uniform(1100.0, 1600.0), order=2)
+    # the mic and the preamp take the hit: a hard, slightly asymmetric clip
+    src = saturate(_norm(src) * (2.2, 2.6, 1.3)[kind], 2.0)
+    # the ground reflection, a few ms behind and a little darker
+    g = int(crng.uniform(0.002, 0.006) * sr)
+    src = src + 0.5 * np.concatenate((np.zeros(g), bandlimit(src, sr, None, 4000.0, order=2)[: n - g]))
+
+    # The surroundings, per ear. Discrete echoes from big reflectors (each
+    # lower-passed by distance), and a diffuse roll: noise shaped by a slow
+    # swell and an exponential decay, low-passed the way air takes the highs
+    # off a long path.
+    T60 = (0.8, 1.0, 1.6)[kind] * crng.uniform(0.9, 1.1)
+    roll_lp = (2600.0, 2200.0, 1100.0)[kind]
+    roll_lvl = (0.1, 0.12, 0.35)[kind]
+
+    def space(r):
         er = np.zeros(n)
-        for _ in range(10):
-            d = int(crng.uniform(0.02, 0.25 if not dist else 0.5) * sr)
-            if d < n:
-                er[d:] += crng.uniform(0.05, 0.2) * mono[: n - d]
-        return bandlimit(er, sr, 100.0, 3000.0, order=2)
+        k_echo = int(crng.integers(4, 7))
+        for i in range(k_echo):
+            d = crng.uniform(0.04, 0.55 if kind != 2 else 0.9)
+            dd = int(d * sr)
+            if dd < n:
+                er[dd:] += crng.uniform(0.12, 0.3) * np.exp(-d / 0.4) * src[: n - dd]
+        er = bandlimit(er, sr, 90.0, 2400.0 if kind != 2 else 1000.0, order=2)
+        env = (1.0 - np.exp(-np.maximum(t - t0, 0) / (0.03 if kind != 2 else 0.08))) * np.exp(-LN1000 * np.maximum(t - t0, 0) / T60)
+        roll = bandlimit(r.standard_normal(n), sr, 70.0, roll_lp, order=2) * env
+        roll *= 0.7 + 0.3 * _smooth(crng, n, sr, 6.0)
+        return er + roll_lvl * _norm(roll)
 
-    p["reverb"], p["reverb_decay"] = (0.25, 0.3, 0.5)[kind], (1.0, 1.4, 2.2)[kind]
-    return mono + echo(), mono + echo()
+    direct = src * (1.0 if kind != 2 else 0.6)
+    p["reverb"], p["reverb_decay"] = (0.15, 0.18, 0.3)[kind], (1.0, 1.2, 1.8)[kind]
+    fade = _fade_out(n, sr, min(0.25, 0.3 * dur))
+    return (direct + space(rng)) * fade, (direct + space(crng)) * fade
 
 
 def _car_horn(ev, sr, rng, crng, p, seed):
