@@ -437,36 +437,216 @@ def _wash(rng, n, sr, lo, hi, order=2):
     return _norm(bandlimit(rng.standard_normal(n), sr, lo, hi, order=order))
 
 
+def _water_fast(m):
+    """The smallest 2^a 3^b 5^c >= m: an FFT length numpy does quickly (a
+    clip length with a large prime factor costs ten times as much)."""
+    best = 1 << max(0, int(m - 1).bit_length())
+    p5 = 1
+    while p5 < best:
+        p35 = p5
+        while p35 < best:
+            q = p35
+            while q < m:
+                q *= 2
+            best = min(best, q)
+            p35 *= 3
+        p5 *= 5
+    return best
+
+
+_WATER_MAGS: dict = {}
+
+
+def _water_mag(m, sr, lo, hi, order):
+    """The Butterworth-shaped band magnitude of `dsp.bandlimit` on an
+    m-point rfft grid (cached: the same few bands are used over and over)."""
+    key = (m, sr, lo, hi, order)
+    mag = _WATER_MAGS.get(key)
+    if mag is None:
+        f = np.fft.rfftfreq(m, 1.0 / sr)
+        mag = np.ones_like(f)
+        if hi is not None:
+            mag /= np.sqrt(1.0 + (f / max(hi, 1.0)) ** (2 * order))
+        if lo is not None:
+            mag /= np.sqrt(1.0 + (np.maximum(f, 1e-9) / max(lo, 1.0)) ** (-2 * order))
+        if len(_WATER_MAGS) > 64:
+            _WATER_MAGS.clear()
+        _WATER_MAGS[key] = mag
+    return mag
+
+
+def _water_band(x, sr, lo=None, hi=None, order=2, pad=2048):
+    """`dsp.bandlimit` (same zero-phase magnitude, same padding against
+    wrap-around) at a fast FFT length."""
+    x = np.asarray(x, dtype=np.float64)
+    n = len(x)
+    m = _water_fast(n + 2 * pad)
+    return np.fft.irfft(np.fft.rfft(np.pad(x, (pad, 0)), m) * _water_mag(m, sr, lo, hi, order), m)[pad : pad + n]
+
+
+def _water_noise(rng, n, sr, lo, hi, order=2):
+    """Band-limited Gaussian noise, peak-normalised: drawn directly as a
+    random spectrum (one inverse FFT), circular so it needs no padding."""
+    m = _water_fast(n)
+    spec = rng.standard_normal(m // 2 + 1) + 1j * rng.standard_normal(m // 2 + 1)
+    return _norm(np.fft.irfft(spec * _water_mag(m, sr, lo, hi, order), m)[:n])
+
+
+def _water_bubbles(n, sr, times, f0s, amps, damp=1.0, rise=0.1, dec=2, floor=5.5):
+    """Many Minnaert bubbles at once: f(t) = f0 (1 + rise d t), amplitude
+    exp(-d t), d = damp (0.043 f0 + 0.0014 f0^1.5) (van den Doel 2005), the
+    same model as `foley._bubble`. A stream or a breaking wave has thousands
+    of them, so they are drawn in vectorised batches (grouped by length) at
+    sr/dec and band-limited back up to sr; each one is cut `floor` nepers
+    (48 dB) down and opens over 1 ms."""
+    times = np.asarray(times, dtype=np.float64)
+    f0s = np.broadcast_to(np.asarray(f0s, dtype=np.float64), times.shape)
+    amps = np.broadcast_to(np.asarray(amps, dtype=np.float64), times.shape)
+    sr2 = sr / dec
+    n2 = _water_fast(-(-n // dec) + 64)
+    out2 = np.zeros(n2)
+    # the glide must stay under the reduced Nyquist
+    f0s = np.minimum(f0s, 0.42 * sr2 / (1.0 + floor * rise))
+    ok = (times >= 0) & (times < n / sr) & (amps > 0) & (f0s > 20)
+    times, f0s, amps = times[ok], f0s[ok], amps[ok]
+    if len(times):
+        d = (0.043 * f0s + 0.0014 * f0s**1.5) * damp
+        L = np.maximum(16, np.ceil(floor / d * sr2)).astype(int)
+        cls = np.ceil(np.log2(L)).astype(int)
+        start = (times * sr2).astype(int)
+        r = max(2, int(0.001 * sr2))
+        ramp = 0.5 - 0.5 * np.cos(np.pi * (np.arange(r) + 0.5) / r)
+        for c in np.unique(cls):
+            idx = np.nonzero(cls == c)[0]
+            Lc = 1 << int(c)
+            tt = np.arange(Lc) / sr2
+            step = max(1, 1_500_000 // Lc)
+            for b in range(0, len(idx), step):
+                j = idx[b : b + step]
+                dj = d[j, None]
+                y = np.sin(TAU * f0s[j, None] * (tt + 0.5 * rise * dj * tt * tt)) * np.exp(-dj * tt) * amps[j, None]
+                y[:, :r] *= ramp
+                pos = start[j, None] + np.arange(Lc)
+                m = pos < n2
+                out2 += np.bincount(pos[m], weights=y[m], minlength=n2)
+    N = n2 * dec
+    Z = np.zeros(N // 2 + 1, dtype=complex)
+    Y = np.fft.rfft(out2)
+    Z[: len(Y)] = Y
+    return np.fft.irfft(Z, N)[:n] * dec
+
+
+def _water_times(crng, rate, sr, cap=200_000):
+    """Poisson event times (s) for a rate curve `rate` (events/s per sample)."""
+    cum = np.cumsum(rate) / sr
+    total = float(cum[-1]) if len(cum) else 0.0
+    k = int(min(cap, crng.poisson(max(total, 0.0))))
+    if k == 0:
+        return np.zeros(0)
+    u = np.sort(crng.uniform(0.0, total, k))
+    return np.interp(u, cum, np.arange(len(rate)) / sr)
+
+
+def _water_crackle(rng, crng, n, sr, rate, lo, hi, alpha=1.6, order=2):
+    """Crackle: impulses at Poisson times following `rate`, heavy-tailed
+    (Pareto `alpha`) amplitudes, random sign, band-limited to [lo, hi]. The
+    sound of many droplets landing, bubbles bursting, pebbles knocking."""
+    tt = _water_times(crng, rate, sr)
+    amps = np.minimum(crng.pareto(alpha, len(tt)) + 1.0, 30.0)
+    g = _grains(rng, n, tt, amps, sr)
+    return _water_band(g, sr, lo, hi, order=order)
+
+
+def _water_radii(crng, k, r_lo, r_hi, slope=2.5):
+    """Bubble radii (mm) from a power law ~ r^-slope on [r_lo, r_hi]
+    (breaking waves and plunging jets: slope 2-3.5)."""
+    u = crng.uniform(0.0, 1.0, k)
+    a = 1.0 - slope
+    return (r_lo**a + u * (r_hi**a - r_lo**a)) ** (1.0 / a)
+
+
+def _water_resonate(x, sr, f1, peaks, q, gain, n_fft=1024, hop=256):
+    """Filter `x` through a moving air column: a quarter-wave pipe (open at
+    the rim, closed by the water) has peaks at the odd multiples of f1(t).
+    `f1` is a curve over the clip; `peaks` the number of odd modes; `q` their
+    sharpness; `gain` their height over the dry level."""
+    from .dsp import istft, stft
+
+    X, n = stft(x, n_fft, hop)
+    nf = X.shape[0]
+    fr = np.fft.rfftfreq(n_fft, 1.0 / sr)
+    f = np.interp(np.arange(nf) * hop, np.arange(len(f1)), f1)[:, None]
+    G = np.ones((nf, len(fr)))
+    for k in range(peaks):
+        fk = (2 * k + 1) * f
+        G += gain / (k + 1) ** 0.7 / (1.0 + ((fr[None, :] - fk) / (fk / q)) ** 2)
+    return istft(X * G, n_fft, hop, length=n)
+
+
 def _wave_crash(ev, sr, rng, crng, p, seed):
-    """One wave: the swell rises (low rush), breaks (a broadband crash with a
-    low thump), then the foam hisses and fizzes as it runs up and drains
-    back, slowly darkening."""
+    """One wave reaching the shore. Surf is the sound of air in water: the
+    crest spills (a growing hiss over a low rumble), the lip plunges and
+    traps a cloud of large bubbles (a broadband roar with a low thump), the
+    foam runs up the beach as a long wash of tiny bubbles fizzing and
+    bursting, and the water drains back: a soft hiss over sand, a clatter of
+    rolling pebbles on a stony beach."""
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
-    size = (0.6, 1.0, 1.3)[seed % 3]
-    t_break = min(0.25 * dur, crng.uniform(0.6, 1.1) * size)
-    rise = (0.5 - 0.5 * np.cos(np.pi * np.clip(t / max(t_break, 1e-3), 0, 1))) ** 2
-    after = np.maximum(t - t_break, 0.0)
-    decay_t = max(0.3 * dur, 0.6)
-    body_env = np.where(t < t_break, rise, np.exp(-after / (0.45 * decay_t)))
-    foam_env = _attack(n, sr, t_break, 0.08) * np.exp(-after / decay_t) * (0.75 + 0.25 * _smooth(crng, n, sr, 3.0))
+    kind = seed % 3
+    size = (0.55, 1.0, 1.35)[kind]
+    t_b = min(0.3 * dur, crng.uniform(0.3, 0.55) * (0.7 + 0.3 * size))
+    after = np.maximum(t - t_b, 0.0)
+    pre = np.clip(t / max(t_b, 1e-3), 0.0, 1.0) ** 2
+    # the roar: up over 60-150 ms, gone in ~0.4-0.9 s
+    tau_r = 0.25 + 0.45 * size
+    roar_env = _attack(n, sr, t_b - 0.02, 0.06 + 0.07 * size) * np.exp(-after / tau_r)
+    # the wash: rises with the run-up, fades slowly with a few surges
+    tau_w = max(0.6, 0.5 * dur)
+    surge = 0.7 + 0.3 * _smooth(crng, n, sr, 2.5)
+    wash_env = (_attack(n, sr, t_b, 0.25) * np.exp(-after / tau_w) * surge + 0.25 * pre) / 1.25
+    # backwash: the water drains back once the run-up stops
+    t_bk = t_b + crng.uniform(0.35, 0.5) * dur
+    bk = np.clip((t - t_bk) / 0.5, 0.0, None)
+    back_env = bk * np.exp(1.0 - bk)
+    tail = _fade_out(n, sr, min(0.25 * dur, 0.8))
 
-    def chan():
-        rush = _wash(rng, n, sr, 60.0, 900.0) * body_env
-        crash = _wash(rng, n, sr, 200.0, 5000.0) * _attack(n, sr, t_break - 0.05, 0.08) * np.exp(-after / (0.12 * size + 0.1))
-        foam = _wash(rng, n, sr, 700.0, 7000.0, order=4) * foam_env
-        # bubbling in the foam: many tiny bubbles
-        cnt = int(400 * dur)
-        tt = t_break + crng.exponential(decay_t * 0.8, cnt)
-        g = _grains(rng, n, tt, np.exp(-(tt - t_break) / decay_t), sr)
-        fizz = bandlimit(g, sr, 1500.0, 6500.0, order=4)
-        return 0.8 * rush + 0.9 * size * crash + 0.55 * foam + 0.3 * _norm(fizz)
+    # trapped air: big bubbles in the plunge (roar), small ones in the foam
+    def cloud(rate_env, rate, r_lo, r_hi, slope, amp_pow, damp):
+        tt = _water_times(crng, rate * rate_env, sr)
+        r = _water_radii(crng, len(tt), r_lo, r_hi, slope)
+        a = r**amp_pow * np.interp(tt, t, rate_env) * crng.uniform(0.3, 1.0, len(tt))
+        return _water_bubbles(n, sr, tt, 3260.0 / r, a, damp=damp, rise=0.05, dec=4 if r_lo > 1.0 else 2)
 
-    thump = bandlimit(_burst(rng, n, int(t_break * sr), int(0.4 * sr), 0.09, sr, rise=0.01), sr, 35.0, 180.0, order=2)
-    th = 0.5 * size * _norm(thump)
-    fo = _fade_out(n, sr, min(0.4 * dur, 1.5))
-    return (chan() + th) * fo, (chan() + th) * fo
+    big = _norm(cloud(roar_env, 900 * size, 1.5, 14.0, 2.2, 0.8, 1.4))
+    small = _norm(cloud(wash_env, 500.0, 0.6, 2.2, 2.8, 0.5, 1.2))
+    thump = _water_band(_burst(rng, n, int(t_b * sr), int(0.5 * sr), 0.06 + 0.06 * size, sr, rise=0.02), sr, 30.0, 160.0, order=2)
+    thump = (0.12 if kind == 0 else 0.3 * size) * _norm(thump)
+
+    def chan(common):
+        # turbulence: brown-ish rumble and a pinkish roar
+        rumble = _water_noise(rng, n, sr, 60.0, 400.0) * (0.5 * pre + roar_env + 0.4 * wash_env)
+        roar_n = _water_noise(rng, n, sr, 250.0, 3000.0) * roar_env
+        # the plunge hits: crackle of impacts, dense
+        splat = _water_crackle(rng, crng, n, sr, 6000.0 * roar_env + 1.0, 300.0, 7000.0, alpha=1.8)
+        # the foam: many tiny bursts, a hiss, all fading with the wash
+        fizz = _water_crackle(rng, crng, n, sr, 20000.0 * wash_env + 1.0, 1500.0, 9000.0, alpha=3.0)
+        hiss = _water_noise(rng, n, sr, 400.0, 8000.0) * wash_env
+        out = common + (0.35 * rumble + 0.9 * size * roar_n + 0.45 * size * _norm(splat)
+               + 0.5 * hiss + 0.3 * _norm(fizz))
+        if kind == 2:
+            # pebbles rolled back down the beach: hard knocks, a clatter
+            clat = _water_crackle(rng, crng, n, sr, 900.0 * back_env + 1.0, 900.0, 6500.0, alpha=1.3, order=4)
+            out = out + 0.8 * _norm(clat) * np.minimum(1.0, 4.0 * back_env)
+        else:
+            # sand: the drain is a soft fizzing hiss
+            drain = _water_crackle(rng, crng, n, sr, 5000.0 * back_env + 1.0, 2500.0, 9000.0, alpha=2.5)
+            out = out + 0.25 * _norm(drain) * back_env
+        # foam and distance soften the top: surf falls ~4-6 dB/octave above 1-2 kHz
+        return _water_band(out, sr, None, 4500.0, order=1)
+
+    common = 0.45 * size * big + 0.4 * small + thump
+    return chan(common) * tail, chan(common) * tail
 
 
 def _air_fastlen(m: int) -> int:
@@ -588,27 +768,53 @@ def _wind_gust(ev, sr, rng, crng, p, seed):
 
 
 def _splash(ev, sr, rng, crng, p, seed):
-    """Something enters water: the hit (a short, mid-bright slap), the crown
-    and droplets falling back (many small bubbles), and the cavity closing
-    (a low bloop)."""
+    """Something enters water. The impact is a slap (a short broadband
+    crack and, for anything heavy, the thump of displaced water); a crown of
+    water is thrown up and hisses; the cavity behind the object pinches off
+    into a big bubble (the "plunk") and a gurgle of smaller ones; then the
+    spray falls back as a patter of droplets, each a click and often a tiny
+    bubble. A big jump throws a jet that collapses into a second splash."""
     n = _n(ev, sr)
     dur = n / sr
-    size = (0.4, 0.8, 1.4)[seed % 3]
-    at = int(0.004 * sr)
-    slap = bandlimit(_burst(rng, n, at, int(0.12 * sr), 0.018 * size + 0.01, sr, rise=0.002), sr, 250.0, 4500.0, order=4)
-    body = bandlimit(_burst(rng, n, at, int(0.6 * sr), 0.08 * size + 0.04, sr, rise=0.006), sr, 120.0, 2500.0, order=2)
-    bloop_f = 380.0 / size**0.6 * crng.uniform(0.9, 1.1)
-    bloop = _bubble(n, sr, at + int((0.03 + 0.05 * size) * sr), bloop_f, 0.55, 0.25)
-    # droplets falling back over 0.2-1 s: small bubbles at random pitches
-    drops = np.zeros(n)
-    k = int(crng.integers(10, 22) * size)
-    span = min(dur - 0.05, 0.25 + 0.5 * size)
-    for _ in range(k):
-        dt = at / sr + 0.05 + crng.exponential(span * 0.35)
-        if dt < dur - 0.05:
-            a_ = crng.uniform(0.2, 1.0) * np.exp(-(dt / span))
-            _bubble_into(drops, sr, int(dt * sr), crng.uniform(900, 3200), 0.7, 0.12, a_)
-    mono = _norm(slap) + 0.8 * _norm(body) + 0.5 * size**0.5 * _norm(bloop) + 0.4 * _norm(drops)
+    t = np.arange(n) / sr
+    kind = seed % 3
+    size = (0.35, 0.75, 1.4)[kind]
+    t0 = 0.008
+    a0 = int(t0 * sr)
+    after = np.maximum(t - t0, 0.0)
+    slap = _water_band(_burst(rng, n, a0, int(0.12 * sr), 0.003 + 0.008 * size, sr, rise=0.0007), sr, 200.0, 9000.0, order=2)
+    thump = _water_band(_burst(rng, n, a0, int(0.35 * sr), 0.015 + 0.05 * size, sr, rise=0.003), sr, 45.0, 400.0, order=2)
+    # the crown: a spray hiss
+    crown_env = _attack(n, sr, t0, 0.006) * np.exp(-after / (0.03 + 0.1 * size))
+    crown = _water_noise(rng, n, sr, 700.0, 9000.0) * crown_env
+    # cavity pinch-off: radius grows with the object
+    t_c = t0 + (0.03 + 0.1 * size) * crng.uniform(0.85, 1.15)
+    r_c = (5.0, 10.0, 26.0)[kind] * crng.uniform(0.85, 1.15)
+    plunk = _water_bubbles(n, sr, [t_c], [3260.0 / r_c], [1.0], damp=0.8, rise=0.25, dec=2)
+    gk = int((25 + 70 * size) * crng.uniform(0.8, 1.2))
+    gt = t_c - 0.01 + crng.gamma(1.5, 0.05 + 0.08 * size, gk)
+    gr = _water_radii(crng, gk, 1.0, 4.0 + 6.0 * size, 2.0)
+    gurgle = _water_bubbles(n, sr, gt, 3260.0 / gr, gr**0.7 * np.exp(-(gt - t_c) / (0.15 + 0.2 * size)), damp=1.1, rise=0.15)
+    # fallback: droplet impacts, a hump of patter over ~0.1 .. 0.4 + 0.6 size s
+    t_p = 0.06 + 0.08 * size
+    u = after / t_p
+    hump = np.where(u < 1.0, u**2, np.exp(-(after - t_p) / (0.1 + 0.25 * size))) * (t > t0 + 0.02)
+    if kind == 2:
+        # the Worthington jet falls back: a second, smaller splash
+        t2 = t0 + crng.uniform(0.32, 0.42)
+        u2 = np.maximum(t - t2, 0.0) / 0.25
+        hump = hump + 0.7 * u2 * np.exp(1.0 - u2) * (t > t2)
+        slap = slap + 0.35 * _water_band(_burst(rng, n, int(t2 * sr), int(0.1 * sr), 0.012, sr, rise=0.002), sr, 300.0, 8000.0, order=2)
+    rate = (250.0 + 500.0 * size) * hump
+    pat = _water_crackle(rng, crng, n, sr, rate + 0.5, 600.0, 9000.0, alpha=1.5)
+    dt = _water_times(crng, 0.35 * rate, sr)
+    dr = _water_radii(crng, len(dt), 0.5, 2.0, 2.0)
+    drops = _water_bubbles(n, sr, dt, 3260.0 / dr, crng.uniform(0.2, 1.0, len(dt)) * np.interp(dt, t, hump), damp=1.0, rise=0.2)
+    slosh = _water_noise(rng, n, sr, 250.0, 1500.0) * _attack(n, sr, t0, 0.04) * np.exp(-after / (0.12 + 0.25 * size))
+    mono = (_norm(slap) + (0.15 + 0.3 * size) * _norm(thump) + 0.55 * crown
+            + (0.35 + 0.25 * size) * _norm(plunk) + 0.5 * _norm(gurgle)
+            + 0.35 * _norm(pat) + 0.25 * _norm(drops) + 0.3 * slosh)
+    mono = mono * _fade_out(n, sr, min(0.2, 0.15 * dur))
     return mono, _decorrelate(mono, sr, crng)
 
 
@@ -1533,56 +1739,98 @@ def _applause(ev, sr, rng, crng, p, seed):
 
 
 def _pouring_water(ev, sr, rng, crng, p, seed):
-    """A stream of water: turbulent splashing at the surface (bubbles at many
-    sizes) and, into a glass, the air column above the water rising in pitch
-    as it fills."""
+    """A stream of water poured into a vessel. The falling jet entrains air
+    where it meets the surface: a dense cloud of small bubbles ringing at
+    their Minnaert pitches (a few hundred Hz to a few kHz) and a crackle of
+    droplet impacts, both following the flow. Into a glass, the air column
+    above the water (a pipe closed by the water) colours it all, and its
+    resonance climbs as the glass fills; a jug into a pot is a thicker,
+    lower, glugging stream. At the end the stream thins and the last drops
+    fall."""
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
     glass = seed % 2 == 0
-    env = _attack(n, sr, 0.0, 0.08) * _fade_out(n, sr, min(0.4, 0.2 * dur))
-    bubbles = np.zeros(n)
-    count = int((240 if glass else 160) * dur)
-    for _ in range(count):
-        tm = crng.uniform(0.0, dur - 0.03)
-        fb = crng.uniform(600, 3000) if glass else crng.uniform(250, 1500)
-        _bubble_into(bubbles, sr, int(tm * sr), fb, 1.2, 0.3, crng.uniform(0.2, 1.0))
-    stream = _wash(rng, n, sr, 300.0, 4000.0)
+    t_on = 0.02
+    t_off = max(0.4, dur - crng.uniform(0.25, 0.45))
+    flow = _attack(n, sr, t_on, 0.06) * (1.0 - _attack(n, sr, t_off, 0.18))
+    wob = 0.8 + 0.2 * _smooth(crng, n, sr, 4.0)
+    if not glass:
+        # glugging: air bubbles back into the jug through the spout choke the
+        # stream a few times a second, at irregular moments
+        gt = np.cumsum(crng.uniform(0.14, 0.3, int(dur / 0.14) + 2))
+        g = np.zeros(n)
+        for tg in gt:
+            g += np.exp(-0.5 * ((t - tg) / 0.035) ** 2)
+        wob = wob * (1.0 - 0.35 * np.clip(g, 0.0, 1.0))
+    flow = flow * wob
+    # into an empty glass the stream first hits the bottom: no bubbles yet
+    wet = _attack(n, sr, t_on, 0.35) if glass else _attack(n, sr, t_on, 0.1)
+    rate_b = (1100.0 if glass else 900.0) * flow * wet
+    tt = _water_times(crng, rate_b, sr)
+    r = _water_radii(crng, len(tt), *((0.6, 3.5) if glass else (1.0, 7.0)), 2.2)
+    a = r**0.6 * np.interp(tt, t, flow) * crng.uniform(0.2, 1.0, len(tt))
+    bub = _water_bubbles(n, sr, tt, 3260.0 / r, a, damp=1.3, rise=0.15, dec=2)
+    crack = _water_crackle(rng, crng, n, sr, 3500.0 * flow + 1.0, 400.0 if glass else 250.0, 10000.0, alpha=1.7)
+    turb = _water_noise(rng, n, sr, 200.0 if glass else 120.0, 9000.0 if glass else 6000.0) * flow
+    mono = _norm(bub) + 0.9 * _norm(crack) + 0.35 * turb
+    # the last drops after the stream stops
+    k = int(crng.integers(2, 5))
+    dt = t_off + 0.12 + np.cumsum(crng.uniform(0.05, 0.12, k))
+    dr = crng.uniform(1.0, 2.5, k)
+    mono = mono + 0.5 * _water_bubbles(n, sr, dt, 3260.0 / dr, crng.uniform(0.3, 0.8, k) * np.exp(-np.arange(k) * 0.4), damp=0.9, rise=0.2)
     if glass:
-        # the resonance of the shrinking air column: 300 Hz -> 1.5 kHz
-        f = 300.0 * (5.0 ** (t / dur))
-        res = np.zeros(n)
-        noise = rng.standard_normal(n)
-        blk = int(0.04 * sr)
-        for s in range(0, n, blk):
-            e = min(n, s + 2 * blk)
-            c = float(f[min(n - 1, s + blk // 2)])
-            res[s:e] += bandlimit(noise[s:e], sr, c * 0.9, c * 1.1, order=2) * np.hanning(e - s)
-        mono = _norm(bubbles) + 0.35 * stream + 0.6 * _norm(res)
+        # air column: depth 12 cm -> 2 cm, end correction 0.6 x 3.5 cm radius
+        fill = np.clip((t - t_on) / (t_off - t_on), 0.0, 1.0)
+        L = 0.12 - 0.10 * fill + 0.021
+        mono = _water_resonate(mono, sr, 343.0 / (4.0 * L), peaks=3, q=7.0, gain=4.0)
     else:
-        mono = _norm(bubbles) + 0.5 * stream
-    mono = mono * env * (0.85 + 0.15 * _smooth(crng, n, sr, 8.0))
+        # a wide pot: a broad, low, slowly rising cavity colour
+        fill = np.clip((t - t_on) / (t_off - t_on), 0.0, 1.0)
+        L = 0.16 - 0.04 * fill + 0.07
+        mono = _water_resonate(mono, sr, 343.0 / (4.0 * L), peaks=3, q=3.0, gain=1.5)
+    mono = mono * _fade_out(n, sr, 0.05)
     return mono, _decorrelate(mono, sr, crng)
 
 
 def _can_opening(ev, sr, rng, crng, p, seed):
-    """Pull tab: a click and crack of the scored lid, the burst of gas (a
-    hiss), and the fizz that follows."""
+    """Pull tab: a fingertip lifts the tab (a small tick), the lever cracks
+    the scored lid open (a sharp crack with a short metallic ring) and the
+    pressurised gas bursts out through the gap (a loud, bright hiss that
+    dies as the pressure drops, spitting a few droplets), the tab folds the
+    flap in (a duller clunk) and drops back (a tick), then the drink fizzes:
+    countless tiny bubbles bursting at the surface."""
     n = _n(ev, sr)
     dur = n / sr
     t = np.arange(n) / sr
     beer = seed % 2 == 1
-    at = int(0.02 * sr)
-    tab = _strike(n, sr, at, (2200.0, 3500.0, 5200.0), (0.02, 0.012, 0.008), (1, 0.6, 0.3), rng, 0.0003, noise=0.6)
-    crack_at = at + int(crng.uniform(0.05, 0.09) * sr)
-    crack = _strike(n, sr, crack_at, (1800.0 * crng.uniform(0.9, 1.1), 2900.0, 4300.0, 900.0), (0.02, 0.014, 0.008, 0.03),
-                    (1, 0.5, 0.3, 0.4), rng, 0.0002, noise=1.0)
-    hiss_env = _attack(n, sr, crack_at / sr, 0.004) * np.exp(-np.maximum(t - crack_at / sr, 0) / (0.12 if beer else 0.07))
-    hiss = _wash(rng, n, sr, 1800.0, 9000.0, order=4) * hiss_env
-    cnt = int(300 * dur)
-    tt = crack_at / sr + crng.exponential(dur * 0.4, cnt)
-    fizz = bandlimit(_grains(rng, n, tt, np.exp(-tt / dur) * crng.uniform(0.3, 1.0, cnt), sr), sr, 2500.0, 8000.0, order=4)
-    mono = 0.6 * _norm(tab) + _norm(crack) + (0.9 if beer else 0.7) * hiss + 0.25 * _norm(fizz)
+    t_lift = 0.02 + crng.uniform(0.0, 0.03)
+    lift = _strike(n, sr, int(t_lift * sr), (3100.0, 4700.0, 6900.0), (0.006, 0.004, 0.003), (1, 0.6, 0.4), rng, 0.0002, noise=0.8)
+    t_c = t_lift + crng.uniform(0.07, 0.14)
+    ac = int(t_c * sr)
+    lid = np.array((2600.0, 4100.0, 5600.0, 7300.0)) * crng.uniform(0.92, 1.08)
+    crack = _strike(n, sr, ac, lid, (0.025, 0.018, 0.012, 0.008), (1, 0.8, 0.6, 0.4), rng, 0.00015, noise=1.5)
+    snap = _water_band(_burst(rng, n, ac, int(0.006 * sr), 0.0012, sr, rise=0.0003), sr, 800.0, 10000.0, order=2)
+    # the jet: brightest at the burst, darkening and dying as pressure falls
+    tau = 0.13 if beer else 0.08
+    aft = np.maximum(t - t_c, 0.0)
+    env = _attack(n, sr, t_c, 0.0015) * (np.exp(-((aft / (2.2 * tau)) ** 2)) * (0.6 + 0.4 * np.exp(-aft / tau)) + 0.03 * np.exp(-aft / (4.0 * tau)))
+    flick = 0.75 + 0.25 * _smooth(crng, n, sr, 60.0)
+    hiss = _water_band(rng.standard_normal(n), sr, 700.0, 10000.0, order=1) * env * flick
+    spit = _water_crackle(rng, crng, n, sr, 2500.0 * env + 1.0, 1500.0, 9000.0, alpha=1.6)
+    t_f = t_c + crng.uniform(0.08, 0.16)
+    fold = _strike(n, sr, int(t_f * sr), (1350.0, 2400.0, 3800.0), (0.02, 0.015, 0.01), (1, 0.6, 0.4), rng, 0.0004, noise=0.6)
+    t_back = t_f + crng.uniform(0.25, 0.45)
+    back = _strike(n, sr, int(t_back * sr), (2900.0, 4400.0), (0.008, 0.005), (1, 0.6), rng, 0.0002, noise=0.5)
+    # effervescence: bursts at the surface, thinning out
+    fz = _attack(n, sr, t_c + 0.03, 0.08) * np.exp(-np.maximum(t - t_c, 0.0) / (0.9 if beer else 0.6))
+    fizz = _water_crackle(rng, crng, n, sr, 400.0 * fz + 1.0, 2500.0, 9500.0, alpha=1.5)
+    ft = _water_times(crng, 350.0 * fz, sr)
+    fb = _water_bubbles(n, sr, ft, crng.uniform(2500.0, 6000.0, len(ft)), crng.uniform(0.2, 1.0, len(ft)) * np.interp(ft, t, fz), damp=1.2, rise=0.1)
+    mono = (0.25 * _norm(lift) + 0.4 * _norm(crack) + 0.35 * _norm(snap) + _norm(hiss)
+            + 0.3 * _norm(spit) * env + 0.35 * _norm(fold) + 0.2 * _norm(back)
+            + 0.05 * _norm(fizz) + 0.03 * _norm(fb))
+    mono = mono * _fade_out(n, sr, min(0.2, 0.15 * dur))
     return mono, _decorrelate(mono, sr, crng, taps=3)
 
 

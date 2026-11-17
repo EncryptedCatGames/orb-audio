@@ -56,7 +56,7 @@ FOLEY_PARAMS: dict[str, dict[str, float]] = {
     "door_slam": dict(f0=95.0, width=0.35, reverb=0.28, reverb_decay=0.8),
     "knock": dict(f0=185.0, width=0.25, reverb=0.16, reverb_decay=0.5),
     "footsteps": dict(f0=190.0, width=0.2, reverb=0.14, reverb_decay=0.45),
-    "water_drop": dict(width=0.3, reverb=0.3, reverb_decay=1.1),
+    "water_drop": dict(width=0.3, reverb=0.18, reverb_decay=0.6),
     "explosion": dict(f0=60.0, width=0.7, reverb=0.18, reverb_decay=1.4),
 }
 
@@ -560,22 +560,57 @@ def _bubble(n: int, sr: int, at: int, f0: float, damp_scale: float = 0.7, rise: 
     return out
 
 
+def _drip_bubble(n: int, sr: int, at: float, f0: float, amp: float, damp: float = 1.0, rise: float = 0.15) -> np.ndarray:
+    """One Minnaert bubble as `_bubble`, with a 0.6 ms onset (a drop's
+    bubble is born abruptly, it does not fade in) and the time in seconds."""
+    out = np.zeros(n)
+    i = int(at * sr)
+    if i >= n or i < 0:
+        return out
+    d = (0.043 * f0 + 0.0014 * f0**1.5) * damp
+    k = min(n - i, int(6.0 / d * sr))
+    t = np.arange(k) / sr
+    a = min(k, max(2, int(0.0006 * sr)))
+    env = np.exp(-d * t)
+    env[:a] *= 0.5 - 0.5 * np.cos(np.pi * (np.arange(a) + 0.5) / a)
+    out[i : i + k] = amp * np.sin(TAU * f0 * (t + 0.5 * rise * d * t * t)) * env
+    return out
+
+
 def _water_drop(ev: Event, sr: int, rng: np.random.Generator, crng: np.random.Generator, p: dict, seed: int):
-    n = max(1, int(ev.dur * sr))
-    at = int(0.003 * sr)
+    """A drop falling into water. The impact is a tiny, sharp, broadband tick
+    (well under a millisecond: the drop's own size); a few milliseconds
+    later the crater closes over a small air bubble that rings at its
+    Minnaert pitch and glides up as it rises, dying within tens of ms (the
+    "plink"). The crater's rebound throws up a thin jet whose tip falls back
+    as a much smaller droplet a few tens of ms later: a second, fainter,
+    higher plink. A larger drop (the plop) also throws a short crown of
+    spray and its bigger bubble rings lower and longer."""
+    n_ev = max(1, int(ev.dur * sr))
+    # everything has died away within 0.6 s: render that much, then pad
+    n = min(n_ev, int(0.6 * sr))
+    t0 = 0.004
     if seed % 2 == 0:
-        # drip: a small droplet, a high plink
-        f0 = crng.uniform(1300.0, 2500.0)
-        bub = _bubble(n, sr, at + int(crng.uniform(0.002, 0.006) * sr), f0, crng.uniform(0.55, 0.8), crng.uniform(0.08, 0.14))
-        tick = bandlimit(_burst(rng, n, at, int(0.003 * sr), 0.0007, sr), sr, 2500.0, 10000.0, order=4)
-        mono = _norm(bub) + 0.25 * _norm(tick)
+        # drip: a 3-4 mm drop, bubble ~1 mm: 1.2 - 2.6 kHz
+        f0 = crng.uniform(1200.0, 2600.0)
+        tick = bandlimit(_burst(rng, n, int(t0 * sr), int(0.002 * sr), 0.0003, sr, rise=0.0002), sr, 1500.0, 11000.0, order=2)
+        bub = _drip_bubble(n, sr, t0 + crng.uniform(0.003, 0.008), f0, 1.0, crng.uniform(0.9, 1.2), crng.uniform(0.2, 0.35))
+        tj = t0 + crng.uniform(0.05, 0.11)
+        jet = bandlimit(_burst(rng, n, int(tj * sr), int(0.0015 * sr), 0.0002, sr, rise=0.0002), sr, 2500.0, 11000.0, order=2)
+        bub2 = _drip_bubble(n, sr, tj + 0.002, f0 * crng.uniform(1.4, 2.0), 1.0, 1.1, 0.25)
+        mono = _norm(bub) + 0.6 * _norm(tick) + crng.uniform(0.1, 0.3) * (_norm(bub2) + 0.4 * _norm(jet))
     else:
-        # plop: a larger drop, a splash, the main bubble and a smaller one
-        f0 = crng.uniform(480.0, 900.0)
-        bub = _bubble(n, sr, at + int(crng.uniform(0.006, 0.014) * sr), f0, crng.uniform(0.6, 0.85), crng.uniform(0.1, 0.16))
-        bub2 = _bubble(n, sr, at + int(crng.uniform(0.02, 0.06) * sr), f0 * crng.uniform(1.8, 2.6), 0.8, 0.12)
-        splash = bandlimit(_burst(rng, n, at, int(0.06 * sr), 0.012, sr, rise=0.002), sr, 300.0, 3200.0, order=4)
-        mono = _norm(bub) + 0.35 * _norm(bub2) + 0.4 * _norm(splash)
+        # plop: a big drop (or a pebble-sized blob), bubble 3-6 mm
+        f0 = crng.uniform(550.0, 1100.0)
+        tick = bandlimit(_burst(rng, n, int(t0 * sr), int(0.004 * sr), 0.0006, sr, rise=0.0003), sr, 600.0, 10000.0, order=2)
+        crown = bandlimit(_burst(rng, n, int(t0 * sr), int(0.05 * sr), 0.008, sr, rise=0.001), sr, 900.0, 8000.0, order=2)
+        bub = _drip_bubble(n, sr, t0 + crng.uniform(0.008, 0.016), f0, 1.0, crng.uniform(0.55, 0.75), crng.uniform(0.3, 0.45))
+        bub2 = _drip_bubble(n, sr, t0 + crng.uniform(0.02, 0.05), f0 * crng.uniform(1.8, 2.6), 1.0, 1.0, 0.2)
+        tj = t0 + crng.uniform(0.09, 0.16)
+        bub3 = _drip_bubble(n, sr, tj, f0 * crng.uniform(2.2, 3.0), 1.0, 1.1, 0.25)
+        mono = (_norm(bub) + 0.5 * _norm(tick) + 0.35 * _norm(crown) + 0.3 * _norm(bub2)
+                + crng.uniform(0.15, 0.3) * _norm(bub3))
+    mono = np.pad(mono, (0, n_ev - n))
     return mono, mono
 
 
