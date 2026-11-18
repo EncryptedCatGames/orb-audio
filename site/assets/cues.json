@@ -47,7 +47,7 @@
   {
    "name": "storm",
    "label": "Rain + thunder",
-   "caption": "8.00-second calm cue, rain bed, with swell @1.00 3.00s -20dB C #97, sub drop @4.00 3.00s -12dB C #98, noise sweep @4.00 2.50s -20dB L1 #99, impact @4.05 0.90s -14dB R1 #9a",
+   "caption": "8.00-second calm cue, rain bed, with thunder @0.60 6.00s -10dB L1 #0f, thunder @4.40 3.60s -16dB R2 #0e",
    "planned": true
   },
   {
@@ -126,9 +126,6 @@
  "cues": [
   {
    "name": "notify",
-   "title": "Message received",
-   "group": "App & UI",
-   "use": "Chat apps, inbox, push notification.",
    "caption": "2.00-second bright cue, no bed, with ui pop @0.10 0.12s -8dB L1 #03, bell @0.22 1.20s -12dB R1 #07",
    "spec": {
     "duration": 2.0,
@@ -1130,13 +1127,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Message received",
+   "group": "App & UI",
+   "use": "Chat apps, inbox, push notification."
   },
   {
    "name": "tap",
-   "title": "Button tap + toggle",
-   "group": "App & UI",
-   "use": "Buttons, switches, checkboxes.",
    "caption": "1.50-second neutral cue, no bed, with click @0.10 0.05s -10dB C #0b, ui pop @0.60 0.10s -10dB C #0c",
    "spec": {
     "duration": 1.5,
@@ -2138,13 +2135,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Button tap + toggle",
+   "group": "App & UI",
+   "use": "Buttons, switches, checkboxes."
   },
   {
    "name": "success",
-   "title": "Payment success",
-   "group": "App & UI",
-   "use": "Checkout complete, task done, upload finished.",
    "caption": "2.50-second hopeful cue, no bed, with ui pop @0.10 0.10s -10dB L1 #15, ui pop @0.22 0.10s -9dB R1 #16, bell @0.34 1.60s -11dB C #17",
    "spec": {
     "duration": 2.5,
@@ -3154,13 +3151,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Payment success",
+   "group": "App & UI",
+   "use": "Checkout complete, task done, upload finished."
   },
   {
    "name": "error",
-   "title": "Error / denied",
-   "group": "App & UI",
-   "use": "Wrong password, invalid input, blocked action.",
    "caption": "1.50-second tense cue, no bed, with glitch @0.10 0.18s -12dB C #1f, click @0.32 0.05s -10dB C #20, sub drop @0.32 0.50s -14dB C #21",
    "spec": {
     "duration": 1.5,
@@ -4170,13 +4167,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Error / denied",
+   "group": "App & UI",
+   "use": "Wrong password, invalid input, blocked action."
   },
   {
    "name": "typing",
-   "title": "Typing sequence",
-   "group": "App & UI",
-   "use": "Terminal UI, chat 'is typing', step-by-step reveal.",
    "caption": "2.00-second neutral cue, no bed, with click @0.10 0.04s -12dB L1 #28, click @0.27 0.04s -11dB R1 #29, click @0.44 0.04s -12dB L1 #2a, click @0.61 0.04s -11dB R1 #2b, click @0.78 0.04s -12dB L1 #2c, click @0.95 0.04s -11dB R1 #2d, click @1.12 0.04s -12dB L1 #2e, ui pop @1.40 0.10s -9dB C #31",
    "spec": {
     "duration": 2.0,
@@ -5226,13 +5223,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Typing sequence",
+   "group": "App & UI",
+   "use": "Terminal UI, chat 'is typing', step-by-step reveal."
   },
   {
    "name": "transition",
-   "title": "Slide transition",
-   "group": "Video editing",
-   "use": "Cuts between clips, swipe between slides.",
    "caption": "2.00-second bright cue, no bed, with whoosh @0.20 0.90s -6dB C #33, click @1.05 0.04s -14dB C #34",
    "spec": {
     "duration": 2.0,
@@ -6234,13 +6231,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Slide transition",
+   "group": "Video editing",
+   "use": "Cuts between clips, swipe between slides."
   },
   {
    "name": "title",
-   "title": "YouTube title hit",
-   "group": "Video editing",
-   "use": "Title cards, lower thirds, punch-ins.",
    "caption": "3.00-second intense cue, no bed, with whoosh @0.20 0.80s -8dB L2 #3d, impact @1.00 0.90s -4dB C #3e, sub drop @1.00 1.20s -10dB C #3f",
    "spec": {
     "duration": 3.0,
@@ -7250,13 +7247,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "YouTube title hit",
+   "group": "Video editing",
+   "use": "Title cards, lower thirds, punch-ins."
   },
   {
    "name": "podcast",
-   "title": "Podcast segment break",
-   "group": "Video editing",
-   "use": "Segment change, chapter marker, ad break.",
    "caption": "4.00-second warm cue, vinyl bed, with noise sweep @0.30 1.60s -16dB C #47, bell @1.80 1.80s -12dB R1 #48",
    "spec": {
     "duration": 4.0,
@@ -8259,13 +8256,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Podcast segment break",
+   "group": "Video editing",
+   "use": "Segment change, chapter marker, ad break."
   },
   {
    "name": "logo",
-   "title": "Logo reveal sting",
-   "group": "Brand",
-   "use": "App launch, intro bumper, brand outro.",
    "caption": "6.00-second hopeful cue, drone bed, with riser @0.30 2.20s -16dB C #51, whoosh @2.10 0.60s -10dB C #52, impact @2.60 0.90s -5dB C #53, sub drop @2.60 1.50s -9dB C #54, bell @2.62 2.50s -11dB C #55",
    "spec": {
     "duration": 6.0,
@@ -9291,13 +9288,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Logo reveal sting",
+   "group": "Brand",
+   "use": "App launch, intro bumper, brand outro."
   },
   {
    "name": "trailer",
-   "title": "Trailer hit",
-   "group": "Brand",
-   "use": "Teasers, reveals, dramatic cuts.",
    "caption": "8.00-second intense cue, drone bed, with riser @0.50 2.50s -18dB C #55, whoosh @2.60 1.00s -10dB L2 #77, impact @3.30 0.90s -4dB C #66, sub drop @3.30 1.60s -8dB C #88, noise sweep @4.60 1.50s -16dB R2 #97, impact @6.30 0.90s -5dB C #99, bell @6.30 1.60s -13dB R1 #3d",
    "spec": {
     "duration": 8.0,
@@ -10339,13 +10336,13 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Trailer hit",
+   "group": "Brand",
+   "use": "Teasers, reveals, dramatic cuts."
   },
   {
    "name": "pickup",
-   "title": "Coin pickup",
-   "group": "Games",
-   "use": "Collectibles, XP gain, reward.",
    "caption": "1.20-second playful cue, no bed, with ui pop @0.05 0.08s -9dB C #5b, bell @0.12 0.80s -12dB C #5c",
    "spec": {
     "duration": 1.2,
@@ -11347,13 +11344,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Coin pickup",
+   "group": "Games",
+   "use": "Collectibles, XP gain, reward."
   },
   {
    "name": "levelup",
-   "title": "Level up",
-   "group": "Games",
-   "use": "Level complete, achievement unlocked.",
    "caption": "3.50-second hopeful cue, no bed, with riser @0.10 1.00s -16dB C #65, ui pop @1.10 0.10s -9dB L2 #66, ui pop @1.22 0.10s -9dB R2 #67, swell @1.20 1.60s -15dB C #68, bell @1.34 2.00s -10dB C #69",
    "spec": {
     "duration": 3.5,
@@ -12379,13 +12376,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Level up",
+   "group": "Games",
+   "use": "Level complete, achievement unlocked."
   },
   {
    "name": "gameover",
-   "title": "Game over",
-   "group": "Games",
-   "use": "Fail state, defeat, out of lives.",
    "caption": "3.50-second dark cue, no bed, with glitch @0.10 0.30s -12dB C #6f, impact @0.45 0.90s -6dB C #70, sub drop @0.45 2.20s -8dB C #71",
    "spec": {
     "duration": 3.5,
@@ -13395,13 +13392,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Game over",
+   "group": "Games",
+   "use": "Fail state, defeat, out of lives."
   },
   {
    "name": "countdown",
-   "title": "Race countdown",
-   "group": "Games",
-   "use": "3-2-1-go, timers, round start.",
    "caption": "4.00-second tense cue, no bed, with click @0.20 0.05s -8dB C #79, click @1.20 0.05s -8dB C #7a, click @2.20 0.05s -8dB C #7b, bell @3.20 0.80s -8dB C #7c, impact @3.20 0.60s -10dB C #7d",
    "spec": {
     "duration": 4.0,
@@ -14427,13 +14424,13 @@
      -0.003,
      0.003
     ]
-   ]
+   ],
+   "title": "Race countdown",
+   "group": "Games",
+   "use": "3-2-1-go, timers, round start."
   },
   {
    "name": "airlock",
-   "title": "Sci-fi airlock",
-   "group": "Scenes",
-   "use": "Game levels, sci-fi shorts, VR.",
    "caption": "6.00-second tense cue, sci fi bed, with bell @0.30 1.00s -16dB C #83, click @1.20 0.05s -10dB L2 #84, click @1.35 0.05s -10dB R2 #85, noise sweep @1.60 2.00s -14dB C #86, sub drop @1.60 1.50s -14dB C #87, whoosh @3.60 1.00s -10dB C #88, impact @4.60 0.80s -8dB C #89",
    "spec": {
     "duration": 6.0,
@@ -15475,13 +15472,13 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Sci-fi airlock",
+   "group": "Scenes",
+   "use": "Game levels, sci-fi shorts, VR."
   },
   {
    "name": "horror",
-   "title": "Horror jump scare",
-   "group": "Scenes",
-   "use": "Horror games, creepy reels.",
    "caption": "5.00-second eerie cue, drone bed, with swell @0.30 2.60s -18dB C #8d, glitch @2.90 0.25s -10dB R1 #8e, impact @3.00 0.90s -3dB C #8f, sub drop @3.00 1.80s -8dB C #90",
    "spec": {
     "duration": 5.0,
@@ -16499,429 +16496,740 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Horror jump scare",
+   "group": "Scenes",
+   "use": "Horror games, creepy reels."
   },
   {
    "name": "storm",
    "title": "Rain + distant thunder",
    "group": "Scenes",
    "use": "Ambience for focus videos, scene background.",
-   "caption": "8.00-second calm cue, rain bed, with swell @1.00 3.00s -20dB C #97, sub drop @4.00 3.00s -12dB C #98, noise sweep @4.00 2.50s -20dB L1 #99, impact @4.05 0.90s -14dB R1 #9a",
+   "caption": "8.00-second calm cue, rain bed, with thunder @0.60 6.00s -10dB L1 #0f, thunder @4.40 3.60s -16dB R2 #0e",
    "spec": {
     "duration": 8.0,
     "texture": "rain",
     "mood": "calm",
     "events": [
      {
-      "role": "swell",
-      "t": 1.0,
-      "dur": 3.0,
-      "gain_db": -20.0,
-      "pan": 0.0,
-      "seed": 151
-     },
-     {
-      "role": "sub_drop",
-      "t": 4.0,
-      "dur": 3.0,
-      "gain_db": -12.0,
-      "pan": 0.0,
-      "seed": 152
-     },
-     {
-      "role": "noise_sweep",
-      "t": 4.0,
-      "dur": 2.5,
-      "gain_db": -20.0,
+      "role": "thunder",
+      "t": 0.6,
+      "dur": 6.0,
+      "gain_db": -10.0,
       "pan": -0.25,
-      "seed": 153
+      "seed": 15
      },
      {
-      "role": "impact",
-      "t": 4.05,
-      "dur": 0.9,
-      "gain_db": -14.0,
-      "pan": 0.25,
-      "seed": 154
+      "role": "thunder",
+      "t": 4.4,
+      "dur": 3.6,
+      "gain_db": -16.0,
+      "pan": 0.5,
+      "seed": 14
      }
     ]
    },
-   "hash": "5e93153eb0e41451",
+   "hash": "e803e6d982b88760",
    "audio": "assets/audio/storm.mp3",
    "duration": 8.0,
    "detail": true,
    "planner_exact": true,
    "audit": {
-    "peak": 0.50526,
-    "rms_dbfs": -24.746967,
-    "dc": -4.2e-05,
-    "max_jump": 0.081595,
-    "click_score": 0.161491,
-    "onset": 2.110542,
-    "spectral_centroid": 2544.705044,
+    "peak": 0.463223,
+    "rms_dbfs": -25.074958,
+    "dc": 0.0,
+    "max_jump": 0.014491,
+    "click_score": 0.031284,
+    "onset": 0.629854,
+    "spectral_centroid": 619.926592,
     "clipped_fraction": 0.0
    },
    "passes": true,
    "peaks": [
     [
-     -0.005,
+     -0.003,
+     0.003
+    ],
+    [
+     -0.003,
      0.004
     ],
     [
-     -0.004,
-     0.005
+     -0.003,
+     0.003
+    ],
+    [
+     -0.002,
+     0.003
+    ],
+    [
+     -0.003,
+     0.003
+    ],
+    [
+     -0.003,
+     0.003
+    ],
+    [
+     -0.003,
+     0.003
+    ],
+    [
+     -0.003,
+     0.003
     ],
     [
      -0.004,
-     0.005
+     0.003
     ],
     [
      -0.004,
+     0.003
+    ],
+    [
+     -0.003,
+     0.003
+    ],
+    [
+     -0.003,
      0.004
-    ],
-    [
-     -0.004,
-     0.004
-    ],
-    [
-     -0.005,
-     0.004
-    ],
-    [
-     -0.004,
-     0.004
-    ],
-    [
-     -0.004,
-     0.004
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.007,
-     0.006
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.007,
-     0.005
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.007,
-     0.005
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.005,
-     0.006
-    ],
-    [
-     -0.005,
-     0.006
-    ],
-    [
-     -0.007,
-     0.005
-    ],
-    [
-     -0.005,
-     0.006
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.005,
-     0.004
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.004,
-     0.005
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.005,
-     0.006
-    ],
-    [
-     -0.006,
-     0.008
     ],
     [
      -0.004,
      0.004
     ],
     [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.007,
-     0.005
-    ],
-    [
      -0.005,
-     0.006
+     0.004
     ],
     [
-     -0.005,
-     0.005
+     -0.004,
+     0.003
     ],
     [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.005,
-     0.006
+     -0.004,
+     0.004
     ],
     [
      -0.005,
      0.004
     ],
     [
-     -0.005,
-     0.008
+     -0.003,
+     0.003
     ],
     [
-     -0.005,
-     0.006
+     -0.02,
+     0.024
     ],
     [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.009,
-     0.006
-    ],
-    [
-     -0.005,
-     0.007
-    ],
-    [
-     -0.007,
-     0.006
-    ],
-    [
-     -0.008,
-     0.007
-    ],
-    [
-     -0.008,
-     0.009
-    ],
-    [
-     -0.007,
-     0.006
-    ],
-    [
-     -0.007,
-     0.007
-    ],
-    [
-     -0.007,
-     0.01
-    ],
-    [
-     -0.008,
-     0.009
-    ],
-    [
-     -0.008,
-     0.008
-    ],
-    [
-     -0.011,
-     0.009
-    ],
-    [
-     -0.012,
-     0.01
-    ],
-    [
-     -0.012,
-     0.01
-    ],
-    [
-     -0.013,
-     0.013
-    ],
-    [
-     -0.012,
-     0.015
-    ],
-    [
-     -0.011,
-     0.014
-    ],
-    [
-     -0.013,
-     0.013
-    ],
-    [
-     -0.015,
-     0.015
-    ],
-    [
-     -0.019,
-     0.016
-    ],
-    [
-     -0.019,
-     0.02
-    ],
-    [
-     -0.014,
-     0.016
-    ],
-    [
-     -0.017,
-     0.017
-    ],
-    [
-     -0.019,
-     0.018
-    ],
-    [
-     -0.021,
-     0.025
-    ],
-    [
-     -0.028,
-     0.021
-    ],
-    [
-     -0.022,
-     0.021
-    ],
-    [
-     -0.027,
-     0.028
+     -0.029,
+     0.029
     ],
     [
      -0.031,
-     0.026
+     0.032
     ],
     [
-     -0.026,
-     0.034
-    ],
-    [
-     -0.031,
+     -0.029,
      0.03
     ],
     [
-     -0.036,
-     0.036
+     -0.035,
+     0.037
     ],
     [
-     -0.034,
-     0.035
+     -0.027,
+     0.029
     ],
     [
-     -0.037,
-     0.033
+     -0.04,
+     0.03
     ],
     [
-     -0.033,
-     0.039
-    ],
-    [
-     -0.038,
-     0.045
-    ],
-    [
-     -0.051,
+     -0.049,
      0.05
     ],
     [
+     -0.034,
+     0.031
+    ],
+    [
+     -0.038,
+     0.031
+    ],
+    [
+     -0.041,
+     0.038
+    ],
+    [
+     -0.051,
+     0.053
+    ],
+    [
+     -0.049,
+     0.046
+    ],
+    [
+     -0.051,
+     0.042
+    ],
+    [
+     -0.086,
+     0.097
+    ],
+    [
+     -0.066,
+     0.068
+    ],
+    [
+     -0.106,
+     0.101
+    ],
+    [
+     -0.07,
+     0.051
+    ],
+    [
+     -0.041,
+     0.081
+    ],
+    [
+     -0.064,
+     0.05
+    ],
+    [
+     -0.1,
+     0.065
+    ],
+    [
+     -0.059,
+     0.048
+    ],
+    [
+     -0.069,
+     0.066
+    ],
+    [
+     -0.077,
+     0.051
+    ],
+    [
+     -0.103,
+     0.088
+    ],
+    [
+     -0.092,
+     0.087
+    ],
+    [
+     -0.085,
+     0.058
+    ],
+    [
      -0.046,
+     0.067
+    ],
+    [
+     -0.047,
+     0.058
+    ],
+    [
+     -0.065,
+     0.068
+    ],
+    [
+     -0.063,
+     0.061
+    ],
+    [
+     -0.065,
+     0.049
+    ],
+    [
+     -0.05,
+     0.066
+    ],
+    [
+     -0.043,
+     0.047
+    ],
+    [
+     -0.045,
      0.055
+    ],
+    [
+     -0.058,
+     0.06
+    ],
+    [
+     -0.039,
+     0.047
+    ],
+    [
+     -0.071,
+     0.051
+    ],
+    [
+     -0.062,
+     0.05
+    ],
+    [
+     -0.071,
+     0.069
+    ],
+    [
+     -0.057,
+     0.065
+    ],
+    [
+     -0.043,
+     0.048
+    ],
+    [
+     -0.041,
+     0.041
+    ],
+    [
+     -0.043,
+     0.052
+    ],
+    [
+     -0.045,
+     0.035
+    ],
+    [
+     -0.053,
+     0.055
+    ],
+    [
+     -0.052,
+     0.043
+    ],
+    [
+     -0.059,
+     0.064
+    ],
+    [
+     -0.058,
+     0.056
+    ],
+    [
+     -0.065,
+     0.057
+    ],
+    [
+     -0.064,
+     0.058
+    ],
+    [
+     -0.06,
+     0.052
+    ],
+    [
+     -0.062,
+     0.086
+    ],
+    [
+     -0.098,
+     0.074
+    ],
+    [
+     -0.055,
+     0.052
+    ],
+    [
+     -0.033,
+     0.042
+    ],
+    [
+     -0.034,
+     0.048
+    ],
+    [
+     -0.023,
+     0.034
+    ],
+    [
+     -0.047,
+     0.078
+    ],
+    [
+     -0.038,
+     0.034
+    ],
+    [
+     -0.036,
+     0.044
+    ],
+    [
+     -0.047,
+     0.055
+    ],
+    [
+     -0.047,
+     0.043
+    ],
+    [
+     -0.055,
+     0.036
+    ],
+    [
+     -0.052,
+     0.041
+    ],
+    [
+     -0.028,
+     0.05
+    ],
+    [
+     -0.04,
+     0.048
+    ],
+    [
+     -0.055,
+     0.051
+    ],
+    [
+     -0.057,
+     0.075
+    ],
+    [
+     -0.068,
+     0.061
+    ],
+    [
+     -0.06,
+     0.045
+    ],
+    [
+     -0.065,
+     0.05
+    ],
+    [
+     -0.062,
+     0.061
+    ],
+    [
+     -0.082,
+     0.066
+    ],
+    [
+     -0.059,
+     0.072
+    ],
+    [
+     -0.065,
+     0.063
+    ],
+    [
+     -0.053,
+     0.073
+    ],
+    [
+     -0.085,
+     0.065
+    ],
+    [
+     -0.104,
+     0.054
+    ],
+    [
+     -0.079,
+     0.072
+    ],
+    [
+     -0.076,
+     0.065
+    ],
+    [
+     -0.082,
+     0.058
+    ],
+    [
+     -0.094,
+     0.062
+    ],
+    [
+     -0.112,
+     0.075
+    ],
+    [
+     -0.081,
+     0.089
+    ],
+    [
+     -0.163,
+     0.145
+    ],
+    [
+     -0.125,
+     0.136
+    ],
+    [
+     -0.214,
+     0.14
+    ],
+    [
+     -0.115,
+     0.118
+    ],
+    [
+     -0.248,
+     0.316
+    ],
+    [
+     -0.149,
+     0.138
+    ],
+    [
+     -0.177,
+     0.208
+    ],
+    [
+     -0.182,
+     0.186
+    ],
+    [
+     -0.269,
+     0.309
+    ],
+    [
+     -0.249,
+     0.259
+    ],
+    [
+     -0.261,
+     0.377
+    ],
+    [
+     -0.421,
+     0.217
+    ],
+    [
+     -0.38,
+     0.369
+    ],
+    [
+     -0.388,
+     0.442
+    ],
+    [
+     -0.279,
+     0.384
+    ],
+    [
+     -0.236,
+     0.414
+    ],
+    [
+     -0.463,
+     0.415
+    ],
+    [
+     -0.325,
+     0.406
+    ],
+    [
+     -0.253,
+     0.462
+    ],
+    [
+     -0.415,
+     0.265
+    ],
+    [
+     -0.322,
+     0.214
+    ],
+    [
+     -0.309,
+     0.276
+    ],
+    [
+     -0.206,
+     0.298
+    ],
+    [
+     -0.249,
+     0.374
+    ],
+    [
+     -0.252,
+     0.264
+    ],
+    [
+     -0.307,
+     0.251
+    ],
+    [
+     -0.325,
+     0.218
+    ],
+    [
+     -0.326,
+     0.299
+    ],
+    [
+     -0.15,
+     0.196
+    ],
+    [
+     -0.156,
+     0.184
+    ],
+    [
+     -0.302,
+     0.145
+    ],
+    [
+     -0.184,
+     0.176
+    ],
+    [
+     -0.123,
+     0.141
+    ],
+    [
+     -0.151,
+     0.134
+    ],
+    [
+     -0.17,
+     0.168
+    ],
+    [
+     -0.169,
+     0.169
+    ],
+    [
+     -0.137,
+     0.206
+    ],
+    [
+     -0.165,
+     0.175
+    ],
+    [
+     -0.094,
+     0.097
+    ],
+    [
+     -0.121,
+     0.14
+    ],
+    [
+     -0.151,
+     0.143
+    ],
+    [
+     -0.102,
+     0.094
+    ],
+    [
+     -0.083,
+     0.103
+    ],
+    [
+     -0.137,
+     0.132
+    ],
+    [
+     -0.09,
+     0.067
+    ],
+    [
+     -0.073,
+     0.111
+    ],
+    [
+     -0.11,
+     0.113
+    ],
+    [
+     -0.08,
+     0.071
+    ],
+    [
+     -0.08,
+     0.098
+    ],
+    [
+     -0.099,
+     0.062
+    ],
+    [
+     -0.042,
+     0.052
+    ],
+    [
+     -0.047,
+     0.041
+    ],
+    [
+     -0.084,
+     0.057
+    ],
+    [
+     -0.061,
+     0.053
+    ],
+    [
+     -0.081,
+     0.055
+    ],
+    [
+     -0.045,
+     0.056
+    ],
+    [
+     -0.073,
+     0.067
+    ],
+    [
+     -0.038,
+     0.048
+    ],
+    [
+     -0.031,
+     0.042
+    ],
+    [
+     -0.05,
+     0.051
+    ],
+    [
+     -0.05,
+     0.054
+    ],
+    [
+     -0.05,
+     0.05
+    ],
+    [
+     -0.07,
+     0.03
+    ],
+    [
+     -0.039,
+     0.044
+    ],
+    [
+     -0.05,
+     0.042
+    ],
+    [
+     -0.04,
+     0.034
+    ],
+    [
+     -0.029,
+     0.034
+    ],
+    [
+     -0.034,
+     0.042
     ],
     [
      -0.039,
@@ -16932,487 +17240,239 @@
      0.047
     ],
     [
-     -0.058,
-     0.044
+     -0.033,
+     0.042
     ],
     [
-     -0.05,
-     0.045
+     -0.03,
+     0.043
     ],
     [
-     -0.053,
-     0.062
+     -0.03,
+     0.034
     ],
     [
-     -0.055,
-     0.067
+     -0.042,
+     0.039
     ],
     [
-     -0.06,
-     0.067
+     -0.041,
+     0.04
     ],
     [
-     -0.066,
-     0.065
+     -0.025,
+     0.038
     ],
     [
-     -0.056,
-     0.07
-    ],
-    [
-     -0.068,
-     0.09
-    ],
-    [
-     -0.077,
-     0.079
-    ],
-    [
-     -0.069,
-     0.076
-    ],
-    [
-     -0.09,
-     0.073
-    ],
-    [
-     -0.091,
-     0.081
-    ],
-    [
-     -0.09,
-     0.082
-    ],
-    [
-     -0.104,
-     0.086
-    ],
-    [
-     -0.087,
-     0.103
-    ],
-    [
-     -0.087,
-     0.098
-    ],
-    [
-     -0.102,
-     0.095
-    ],
-    [
-     -0.093,
-     0.094
-    ],
-    [
-     -0.131,
-     0.124
-    ],
-    [
-     -0.088,
-     0.086
-    ],
-    [
-     -0.067,
-     0.07
-    ],
-    [
-     -0.056,
-     0.048
-    ],
-    [
-     -0.035,
-     0.03
-    ],
-    [
-     -0.023,
-     0.027
-    ],
-    [
-     -0.018,
-     0.017
-    ],
-    [
-     -0.011,
-     0.012
-    ],
-    [
-     -0.007,
-     0.007
-    ],
-    [
-     -0.007,
-     0.006
-    ],
-    [
-     -0.298,
-     0.305
-    ],
-    [
-     -0.461,
-     0.403
-    ],
-    [
-     -0.422,
-     0.479
-    ],
-    [
-     -0.505,
-     0.42
-    ],
-    [
-     -0.356,
-     0.49
-    ],
-    [
-     -0.416,
-     0.389
-    ],
-    [
-     -0.403,
-     0.361
-    ],
-    [
-     -0.343,
-     0.283
-    ],
-    [
-     -0.261,
-     0.279
-    ],
-    [
-     -0.222,
-     0.254
-    ],
-    [
-     -0.219,
-     0.217
-    ],
-    [
-     -0.212,
-     0.186
-    ],
-    [
-     -0.194,
-     0.192
-    ],
-    [
-     -0.184,
-     0.195
-    ],
-    [
-     -0.181,
-     0.18
-    ],
-    [
-     -0.19,
-     0.196
-    ],
-    [
-     -0.193,
-     0.2
-    ],
-    [
-     -0.207,
-     0.197
-    ],
-    [
-     -0.199,
-     0.197
-    ],
-    [
-     -0.201,
-     0.189
-    ],
-    [
-     -0.19,
-     0.196
-    ],
-    [
-     -0.174,
-     0.165
-    ],
-    [
-     -0.175,
-     0.169
-    ],
-    [
-     -0.17,
-     0.168
-    ],
-    [
-     -0.156,
-     0.167
-    ],
-    [
-     -0.17,
-     0.16
-    ],
-    [
-     -0.154,
-     0.17
-    ],
-    [
-     -0.149,
-     0.146
-    ],
-    [
-     -0.165,
-     0.175
-    ],
-    [
-     -0.147,
-     0.144
-    ],
-    [
-     -0.152,
-     0.177
-    ],
-    [
-     -0.165,
-     0.162
-    ],
-    [
-     -0.18,
-     0.194
-    ],
-    [
-     -0.192,
-     0.195
-    ],
-    [
-     -0.206,
-     0.2
-    ],
-    [
-     -0.176,
-     0.189
-    ],
-    [
-     -0.192,
-     0.182
-    ],
-    [
-     -0.189,
-     0.193
-    ],
-    [
-     -0.176,
-     0.196
-    ],
-    [
-     -0.149,
-     0.179
-    ],
-    [
-     -0.191,
-     0.167
-    ],
-    [
-     -0.153,
-     0.159
-    ],
-    [
-     -0.147,
-     0.137
-    ],
-    [
-     -0.161,
-     0.153
-    ],
-    [
-     -0.138,
-     0.133
-    ],
-    [
-     -0.119,
-     0.138
-    ],
-    [
-     -0.122,
-     0.137
-    ],
-    [
-     -0.123,
-     0.112
-    ],
-    [
-     -0.1,
-     0.112
-    ],
-    [
-     -0.114,
-     0.107
-    ],
-    [
-     -0.1,
-     0.099
-    ],
-    [
-     -0.098,
-     0.091
-    ],
-    [
-     -0.094,
-     0.087
-    ],
-    [
-     -0.083,
-     0.098
-    ],
-    [
-     -0.081,
-     0.088
-    ],
-    [
-     -0.078,
-     0.084
-    ],
-    [
-     -0.077,
-     0.076
-    ],
-    [
-     -0.072,
-     0.069
-    ],
-    [
-     -0.07,
-     0.064
-    ],
-    [
-     -0.067,
-     0.059
-    ],
-    [
-     -0.075,
-     0.055
-    ],
-    [
-     -0.067,
-     0.048
-    ],
-    [
-     -0.05,
-     0.053
-    ],
-    [
-     -0.046,
-     0.054
-    ],
-    [
-     -0.048,
-     0.046
-    ],
-    [
-     -0.061,
-     0.048
+     -0.063,
+     0.056
     ],
     [
      -0.047,
-     0.04
-    ],
-    [
-     -0.045,
      0.044
     ],
     [
-     -0.043,
-     0.046
+     -0.027,
+     0.028
     ],
     [
-     -0.039,
-     0.04
+     -0.056,
+     0.042
     ],
     [
-     -0.039,
+     -0.03,
+     0.037
+    ],
+    [
+     -0.054,
      0.035
     ],
     [
-     -0.033,
-     0.032
+     -0.04,
+     0.046
     ],
     [
-     -0.036,
-     0.03
+     -0.04,
+     0.026
     ],
     [
-     -0.036,
-     0.036
+     -0.035,
+     0.029
+    ],
+    [
+     -0.028,
+     0.034
+    ],
+    [
+     -0.032,
+     0.034
+    ],
+    [
+     -0.031,
+     0.029
+    ],
+    [
+     -0.042,
+     0.038
+    ],
+    [
+     -0.026,
+     0.028
+    ],
+    [
+     -0.039,
+     0.029
     ],
     [
      -0.029,
      0.03
     ],
     [
-     -0.026,
-     0.029
+     -0.056,
+     0.042
     ],
     [
-     -0.026,
-     0.025
+     -0.205,
+     0.227
     ],
     [
-     -0.025,
-     0.024
+     -0.043,
+     0.046
     ],
     [
-     -0.024,
-     0.025
+     -0.051,
+     0.045
     ],
     [
-     -0.023,
-     0.026
+     -0.059,
+     0.057
     ],
     [
-     -0.022,
-     0.023
+     -0.067,
+     0.09
     ],
     [
-     -0.021,
-     0.025
+     -0.089,
+     0.058
     ],
     [
-     -0.023,
-     0.022
+     -0.083,
+     0.135
     ],
     [
-     -0.021,
-     0.021
+     -0.132,
+     0.087
     ],
     [
-     -0.021,
-     0.02
+     -0.152,
+     0.086
     ],
     [
-     -0.022,
-     0.02
+     -0.196,
+     0.195
+    ],
+    [
+     -0.259,
+     0.252
+    ],
+    [
+     -0.156,
+     0.165
+    ],
+    [
+     -0.119,
+     0.104
+    ],
+    [
+     -0.081,
+     0.092
+    ],
+    [
+     -0.172,
+     0.101
+    ],
+    [
+     -0.111,
+     0.139
+    ],
+    [
+     -0.071,
+     0.044
+    ],
+    [
+     -0.095,
+     0.082
+    ],
+    [
+     -0.092,
+     0.089
+    ],
+    [
+     -0.097,
+     0.083
+    ],
+    [
+     -0.072,
+     0.059
+    ],
+    [
+     -0.062,
+     0.074
+    ],
+    [
+     -0.065,
+     0.069
+    ],
+    [
+     -0.053,
+     0.054
+    ],
+    [
+     -0.059,
+     0.048
+    ],
+    [
+     -0.029,
+     0.034
     ],
     [
      -0.02,
-     0.018
+     0.026
+    ],
+    [
+     -0.023,
+     0.033
+    ],
+    [
+     -0.022,
+     0.026
     ],
     [
      -0.019,
-     0.018
+     0.016
     ],
     [
-     -0.018,
-     0.017
+     -0.016,
+     0.015
     ],
     [
-     -0.017,
-     0.018
+     -0.014,
+     0.014
     ],
     [
-     -0.004,
-     0.005
+     -0.009,
+     0.008
     ],
     [
-     -0.007,
-     0.005
+     -0.01,
+     0.008
     ],
     [
      -0.005,
+     0.005
+    ],
+    [
+     -0.004,
      0.006
     ],
     [
@@ -17420,116 +17480,37 @@
      0.005
     ],
     [
-     -0.007,
-     0.005
-    ],
-    [
-     -0.006,
-     0.006
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.007,
-     0.005
-    ],
-    [
-     -0.005,
-     0.006
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.005,
-     0.006
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.005,
-     0.007
-    ],
-    [
-     -0.006,
-     0.005
-    ],
-    [
-     -0.004,
-     0.007
-    ],
-    [
-     -0.005,
-     0.006
-    ],
-    [
-     -0.005,
-     0.004
-    ],
-    [
-     -0.004,
-     0.005
-    ],
-    [
-     -0.004,
-     0.005
-    ],
-    [
      -0.004,
      0.004
     ],
     [
      -0.004,
-     0.004
-    ],
-    [
-     -0.005,
-     0.004
-    ],
-    [
-     -0.004,
-     0.004
-    ],
-    [
-     -0.004,
-     0.004
-    ],
-    [
-     -0.005,
-     0.005
-    ],
-    [
-     -0.006,
-     0.005
+     0.003
     ],
     [
      -0.003,
-     0.004
+     0.003
+    ],
+    [
+     -0.004,
+     0.003
+    ],
+    [
+     -0.004,
+     0.003
     ],
     [
      -0.002,
-     0.002
+     0.003
+    ],
+    [
+     -0.001,
+     0.001
     ]
    ]
   },
   {
    "name": "thunderstorm",
-   "title": "Thunderstorm",
-   "group": "Nature & foley",
-   "use": "Storm scenes, weather in games, film ambience.",
    "caption": "14.00-second dark cue, rain bed, with thunder @0.80 7.00s -10dB L2 #03, thunder @6.60 6.50s -4dB R1 #04",
    "spec": {
     "duration": 14.0,
@@ -18531,13 +18512,13 @@
      -0.003,
      0.003
     ]
-   ]
+   ],
+   "title": "Thunderstorm",
+   "group": "Nature & foley",
+   "use": "Storm scenes, weather in games, film ambience."
   },
   {
    "name": "arrival",
-   "title": "Footsteps, door, knock",
-   "group": "Nature & foley",
-   "use": "Someone arrives: thrillers, games, radio drama.",
    "caption": "8.00-second tense cue, room cold bed, with footsteps @0.40 3.20s -12dB L2 #04, door slam @3.90 0.90s -6dB C #01, knock @5.60 0.70s -10dB R1 #03",
    "spec": {
     "duration": 8.0,
@@ -19547,13 +19528,13 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Footsteps, door, knock",
+   "group": "Nature & foley",
+   "use": "Someone arrives: thrillers, games, radio drama."
   },
   {
    "name": "cave",
-   "title": "Cave drips",
-   "group": "Nature & foley",
-   "use": "Dungeons, caves, quiet tension.",
    "caption": "6.00-second eerie cue, drone bed, with water drop @0.60 0.35s -14dB L2 #02, water drop @1.90 0.35s -18dB R2 #05, water drop @3.10 0.35s -12dB C #08, water drop @4.40 0.35s -16dB L1 #0b",
    "spec": {
     "duration": 6.0,
@@ -20571,13 +20552,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Cave drips",
+   "group": "Nature & foley",
+   "use": "Dungeons, caves, quiet tension."
   },
   {
    "name": "explosion",
-   "title": "Explosion",
-   "group": "Nature & foley",
-   "use": "Game blasts, action cuts, destruction.",
    "caption": "7.00-second intense cue, wind bed, with explosion @0.30 3.20s -2dB C #00, explosion @3.40 3.00s -10dB R2 #02",
    "spec": {
     "duration": 7.0,
@@ -21579,13 +21560,13 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Explosion",
+   "group": "Nature & foley",
+   "use": "Game blasts, action cuts, destruction."
   },
   {
    "name": "beach",
-   "title": "Beach",
-   "group": "Nature & foley",
-   "use": "Travel videos, calm scenes, meditation apps.",
    "caption": "12.00-second calm cue, ocean bed, with wave crash @0.50 6.00s -8dB L1 #01, bird chirp @5.00 3.00s -18dB R3 #03",
    "spec": {
     "duration": 12.0,
@@ -22587,13 +22568,13 @@
      -0.022,
      0.026
     ]
-   ]
+   ],
+   "title": "Beach",
+   "group": "Nature & foley",
+   "use": "Travel videos, calm scenes, meditation apps."
   },
   {
    "name": "forest_morning",
-   "title": "Forest morning",
-   "group": "Nature & foley",
-   "use": "Nature documentaries, game overworlds, wake-up screens.",
    "caption": "12.00-second hopeful cue, forest bed, with bird chirp @0.60 3.00s -12dB L2 #02, bird chirp @4.20 3.00s -16dB R2 #01, wind gust @6.00 4.00s -16dB C #02",
    "spec": {
     "duration": 12.0,
@@ -23603,13 +23584,13 @@
      -0.002,
      0.003
     ]
-   ]
+   ],
+   "title": "Forest morning",
+   "group": "Nature & foley",
+   "use": "Nature documentaries, game overworlds, wake-up screens."
   },
   {
    "name": "night_camp",
-   "title": "Night by the pond",
-   "group": "Nature & foley",
-   "use": "Night scenes, sleep sounds, quiet game levels.",
    "caption": "12.00-second calm cue, night bed, with frog @1.00 3.00s -14dB L2 #00, owl @6.00 3.00s -14dB R2 #00",
    "spec": {
     "duration": 12.0,
@@ -24611,13 +24592,13 @@
      -0.018,
      0.018
     ]
-   ]
+   ],
+   "title": "Night by the pond",
+   "group": "Nature & foley",
+   "use": "Night scenes, sleep sounds, quiet game levels."
   },
   {
    "name": "river",
-   "title": "Stream",
-   "group": "Nature & foley",
-   "use": "Relaxation, hiking footage, a garden.",
    "caption": "10.00-second calm cue, stream bed, with bird chirp @3.00 3.00s -18dB R2 #00",
    "spec": {
     "duration": 10.0,
@@ -25611,13 +25592,13 @@
      -0.023,
      0.032
     ]
-   ]
+   ],
+   "title": "Stream",
+   "group": "Nature & foley",
+   "use": "Relaxation, hiking footage, a garden."
   },
   {
    "name": "city_street",
-   "title": "City street",
-   "group": "Nature & foley",
-   "use": "Urban b-roll, establishing shots, open-world games.",
    "caption": "12.00-second neutral cue, traffic bed, with engine @1.00 4.00s -10dB L2 #02, car horn @5.50 1.00s -14dB R2 #01, siren @6.50 5.00s -18dB L1 #00",
    "spec": {
     "duration": 12.0,
@@ -26627,13 +26608,13 @@
      -0.019,
      0.017
     ]
-   ]
+   ],
+   "title": "City street",
+   "group": "Nature & foley",
+   "use": "Urban b-roll, establishing shots, open-world games."
   },
   {
    "name": "sword_fight",
-   "title": "Sword fight",
-   "group": "Nature & foley",
-   "use": "Fantasy games, fight scenes, trailers.",
    "caption": "6.00-second intense cue, wind bed, with sword clash @0.30 1.50s -8dB C #01, sword clash @1.40 1.50s -6dB L1 #00, sword clash @2.30 1.50s -8dB R1 #02, punch @3.60 0.50s -8dB C #02",
    "spec": {
     "duration": 6.0,
@@ -27651,13 +27632,13 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Sword fight",
+   "group": "Nature & foley",
+   "use": "Fantasy games, fight scenes, trailers."
   },
   {
    "name": "haunted_house",
-   "title": "Haunted house",
-   "group": "Nature & foley",
-   "use": "Horror games, Halloween, creepy reveals.",
    "caption": "10.00-second eerie cue, drone bed, with wood creak @0.50 2.50s -12dB L2 #01, clock tick @0.50 8.00s -20dB R2 #02, wood creak @4.00 2.50s -14dB R1 #00, door slam @7.00 0.90s -8dB C #01",
    "spec": {
     "duration": 10.0,
@@ -28675,13 +28656,13 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Haunted house",
+   "group": "Nature & foley",
+   "use": "Horror games, Halloween, creepy reveals."
   },
   {
    "name": "kitchen",
-   "title": "Kitchen",
-   "group": "Everyday",
-   "use": "Cooking videos, home scenes, ads.",
    "caption": "8.00-second warm cue, room cold bed, with can opening @0.30 1.00s -10dB C #00, pouring water @1.60 3.00s -12dB R1 #00, metal clang @5.20 2.00s -16dB L2 #01",
    "spec": {
     "duration": 8.0,
@@ -29691,13 +29672,13 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Kitchen",
+   "group": "Everyday",
+   "use": "Cooking videos, home scenes, ads."
   },
   {
    "name": "office",
-   "title": "Office",
-   "group": "Everyday",
-   "use": "Work-from-home b-roll, productivity apps.",
    "caption": "8.00-second neutral cue, room cold bed, with keyboard typing @0.30 4.00s -14dB L1 #00, mouse click @4.60 0.30s -12dB R1 #01, phone ring @5.20 2.60s -14dB R2 #02",
    "spec": {
     "duration": 8.0,
@@ -30707,13 +30688,13 @@
      -0.002,
      0.001
     ]
-   ]
+   ],
+   "title": "Office",
+   "group": "Everyday",
+   "use": "Work-from-home b-roll, productivity apps."
   },
   {
    "name": "glass",
-   "title": "Glass breaking",
-   "group": "Everyday",
-   "use": "Accidents, break-ins, dramatic beats.",
    "caption": "3.50-second tense cue, no bed, with glass break @0.10 1.60s -6dB C #00",
    "spec": {
     "duration": 3.5,
@@ -31707,13 +31688,13 @@
      0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Glass breaking",
+   "group": "Everyday",
+   "use": "Accidents, break-ins, dramatic beats."
   },
   {
    "name": "alarm",
-   "title": "Alarm clock",
-   "group": "Everyday",
-   "use": "Morning routines, wake-up moments.",
    "caption": "4.00-second tense cue, no bed, with clock alarm @0.10 3.00s -10dB C #00",
    "spec": {
     "duration": 4.0,
@@ -32707,13 +32688,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Alarm clock",
+   "group": "Everyday",
+   "use": "Morning routines, wake-up moments."
   },
   {
    "name": "phone",
-   "title": "Phone ringing",
-   "group": "Everyday",
-   "use": "Incoming calls, plot twists.",
    "caption": "5.00-second neutral cue, no bed, with phone ring @0.10 4.00s -10dB C #00",
    "spec": {
     "duration": 5.0,
@@ -33707,13 +33688,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Phone ringing",
+   "group": "Everyday",
+   "use": "Incoming calls, plot twists."
   },
   {
    "name": "camera",
-   "title": "Camera shutter",
-   "group": "Everyday",
-   "use": "Screenshot, photo apps, paparazzi.",
    "caption": "1.50-second neutral cue, no bed, with camera shutter @0.10 0.60s -10dB C #00",
    "spec": {
     "duration": 1.5,
@@ -34707,13 +34688,13 @@
      0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Camera shutter",
+   "group": "Everyday",
+   "use": "Screenshot, photo apps, paparazzi."
   },
   {
    "name": "applause",
-   "title": "Applause",
-   "group": "Everyday",
-   "use": "Wins, finales, end of a talk.",
    "caption": "6.00-second hopeful cue, no bed, with applause @0.10 5.00s -8dB C #01",
    "spec": {
     "duration": 6.0,
@@ -35707,13 +35688,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Applause",
+   "group": "Everyday",
+   "use": "Wins, finales, end of a talk."
   },
   {
    "name": "champagne",
-   "title": "Champagne pop",
-   "group": "Everyday",
-   "use": "Celebrations, launches, milestones.",
    "caption": "2.50-second playful cue, no bed, with cork pop @0.10 1.50s -8dB C #01",
    "spec": {
     "duration": 2.5,
@@ -36707,13 +36688,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Champagne pop",
+   "group": "Everyday",
+   "use": "Celebrations, launches, milestones."
   },
   {
    "name": "coins",
-   "title": "Coins in a dish",
-   "group": "Everyday",
-   "use": "Payments, tips, rewards.",
    "caption": "2.50-second bright cue, no bed, with coin drop @0.10 1.50s -10dB C #02",
    "spec": {
     "duration": 2.5,
@@ -37707,13 +37688,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Coins in a dish",
+   "group": "Everyday",
+   "use": "Payments, tips, rewards."
   },
   {
    "name": "heartbeat",
-   "title": "Heartbeat",
-   "group": "Everyday",
-   "use": "Suspense, health apps, horror.",
    "caption": "5.00-second tense cue, no bed, with heartbeat @0.10 4.50s -6dB C #01",
    "spec": {
     "duration": 5.0,
@@ -38707,13 +38688,13 @@
      0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Heartbeat",
+   "group": "Everyday",
+   "use": "Suspense, health apps, horror."
   },
   {
    "name": "church_bell",
-   "title": "Church bell",
-   "group": "Everyday",
-   "use": "Towns, weddings, the hour striking.",
    "caption": "8.00-second calm cue, no bed, with church bell @0.10 7.00s -8dB C #01",
    "spec": {
     "duration": 8.0,
@@ -39707,13 +39688,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Church bell",
+   "group": "Everyday",
+   "use": "Towns, weddings, the hour striking."
   },
   {
    "name": "fireworks",
-   "title": "Fireworks",
-   "group": "Everyday",
-   "use": "New Year, celebrations, game wins.",
    "caption": "6.00-second playful cue, no bed, with fireworks @0.10 4.00s -8dB L1 #00, fireworks @2.00 4.00s -12dB R2 #01",
    "spec": {
     "duration": 6.0,
@@ -40715,13 +40696,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Fireworks",
+   "group": "Everyday",
+   "use": "New Year, celebrations, game wins."
   },
   {
    "name": "gunshot",
-   "title": "Gunshot",
-   "group": "Everyday",
-   "use": "Action games, westerns, starting pistol.",
    "caption": "3.00-second intense cue, no bed, with gunshot @0.10 1.50s -6dB C #00",
    "spec": {
     "duration": 3.0,
@@ -41715,13 +41696,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Gunshot",
+   "group": "Everyday",
+   "use": "Action games, westerns, starting pistol."
   },
   {
    "name": "whoosh_air",
-   "title": "Whoosh",
-   "blurb": "One pass, panned left, over a wind bed.",
-   "group": "Building blocks",
    "caption": "4.00-second bright cue, wind bed, with whoosh @0.60 0.90s -6dB L2 #2a",
    "spec": {
     "duration": 4.0,
@@ -42715,13 +42696,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Whoosh",
+   "blurb": "One pass, panned left, over a wind bed.",
+   "group": "Building blocks"
   },
   {
    "name": "impact_deep",
-   "title": "Impact",
-   "blurb": "Short and deep, in a cold room.",
-   "group": "Building blocks",
    "caption": "4.00-second dark cue, room cold bed, with impact @0.60 0.80s -4dB C #1f",
    "spec": {
     "duration": 4.0,
@@ -43715,13 +43696,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Impact",
+   "blurb": "Short and deep, in a cold room.",
+   "group": "Building blocks"
   },
   {
    "name": "riser_tension",
-   "title": "Riser",
-   "blurb": "Tension that peaks exactly on its mark.",
-   "group": "Building blocks",
    "caption": "4.00-second tense cue, drone bed, with riser @0.40 2.40s -16dB C #51",
    "spec": {
     "duration": 4.0,
@@ -44715,13 +44696,13 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Riser",
+   "blurb": "Tension that peaks exactly on its mark.",
+   "group": "Building blocks"
   },
   {
    "name": "sub_drop_clean",
-   "title": "Sub drop",
-   "blurb": "A clean low-end fall over a sci-fi hum.",
-   "group": "Building blocks",
    "caption": "4.00-second intense cue, sci fi bed, with sub drop @0.60 1.20s -8dB C #66",
    "spec": {
     "duration": 4.0,
@@ -45715,85 +45696,15 @@
      -0.0,
      0.0
     ]
-   ]
+   ],
+   "title": "Sub drop",
+   "blurb": "A clean low-end fall over a sci-fi hum.",
+   "group": "Building blocks"
   }
  ],
  "playground": [
   {
    "name": "pg_trailer",
-   "title": "Trailer hit",
-   "blurb": "A riser into a stacked hit, a breath of air, then the answer.",
-   "tag": "cinematic",
-   "controls": [
-    {
-     "kind": "gain",
-     "events": [
-      3
-     ],
-     "label": "sub weight",
-     "min": -20,
-     "max": 0
-    },
-    {
-     "kind": "texture",
-     "label": "bed",
-     "options": [
-      "drone",
-      "sci_fi",
-      "city_hum",
-      "none"
-     ]
-    },
-    {
-     "kind": "seed",
-     "events": [
-      0,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7
-     ],
-     "label": "new take"
-    }
-   ],
-   "marks": [
-    {
-     "events": [
-      0
-     ],
-     "label": "riser"
-    },
-    {
-     "events": [
-      1
-     ],
-     "label": "swell"
-    },
-    {
-     "events": [
-      2,
-      3,
-      4
-     ],
-     "label": "hit"
-    },
-    {
-     "events": [
-      5
-     ],
-     "label": "inhale"
-    },
-    {
-     "events": [
-      6,
-      7
-     ],
-     "label": "answer"
-    }
-   ],
    "caption": "8.00-second intense cue, drone bed, with riser @0.30 2.90s -12dB C #55, swell @1.50 1.60s -18dB C #56, impact @3.20 1.40s -2dB C #66, sub drop @3.20 2.40s -4dB C #88, whoosh @3.20 1.40s -14dB C #77, swell @4.60 1.30s -16dB C #57, impact @5.80 1.20s -5dB C #99, sub drop @5.80 1.80s -8dB C #89",
    "spec": {
     "duration": 8.0,
@@ -46844,25 +46755,15 @@
      -0.001,
      0.001
     ]
-   ]
-  },
-  {
-   "name": "pg_launch",
-   "title": "Launch",
-   "blurb": "Three, two, one: the lift climbs from the last count into the launch.",
-   "tag": "countdown",
+   ],
+   "title": "Trailer hit",
+   "blurb": "A riser into a stacked hit, a breath of air, then the answer.",
+   "tag": "cinematic",
    "controls": [
-    {
-     "kind": "pan",
-     "events": [
-      1
-     ],
-     "label": "count 2"
-    },
     {
      "kind": "gain",
      "events": [
-      5
+      3
      ],
      "label": "sub weight",
      "min": -20,
@@ -46872,11 +46773,25 @@
      "kind": "texture",
      "label": "bed",
      "options": [
-      "none",
-      "wind",
+      "drone",
       "sci_fi",
-      "city_hum"
+      "city_hum",
+      "none"
      ]
+    },
+    {
+     "kind": "seed",
+     "events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+     ],
+     "label": "new take"
     }
    ],
    "marks": [
@@ -46884,31 +46799,39 @@
      "events": [
       0
      ],
-     "label": "3"
+     "label": "riser"
     },
     {
      "events": [
       1
      ],
-     "label": "2"
+     "label": "swell"
     },
     {
      "events": [
       2,
-      3
+      3,
+      4
      ],
-     "label": "1 \u00b7 lift"
+     "label": "hit"
     },
     {
      "events": [
-      4,
-      5,
+      5
+     ],
+     "label": "inhale"
+    },
+    {
+     "events": [
       6,
       7
      ],
-     "label": "launch"
+     "label": "answer"
     }
-   ],
+   ]
+  },
+  {
+   "name": "pg_launch",
    "caption": "7.00-second intense cue, no bed, with click @0.30 0.06s -12dB L2 #51, click @1.30 0.06s -12dB R2 #52, click @2.30 0.06s -10dB L2 #53, riser @2.40 1.80s -10dB C #54, impact @4.30 1.20s -2dB C #55, sub drop @4.30 2.20s -4dB C #56, whoosh @4.30 2.00s -10dB C #57, bell @4.30 2.40s -18dB C #58",
    "spec": {
     "duration": 7.0,
@@ -47958,21 +47881,81 @@
      -0.0,
      0.0
     ]
+   ],
+   "title": "Launch",
+   "blurb": "Three, two, one: the lift climbs from the last count into the launch.",
+   "tag": "countdown",
+   "controls": [
+    {
+     "kind": "pan",
+     "events": [
+      1
+     ],
+     "label": "count 2"
+    },
+    {
+     "kind": "gain",
+     "events": [
+      5
+     ],
+     "label": "sub weight",
+     "min": -20,
+     "max": 0
+    },
+    {
+     "kind": "texture",
+     "label": "bed",
+     "options": [
+      "none",
+      "wind",
+      "sci_fi",
+      "city_hum"
+     ]
+    }
+   ],
+   "marks": [
+    {
+     "events": [
+      0
+     ],
+     "label": "3"
+    },
+    {
+     "events": [
+      1
+     ],
+     "label": "2"
+    },
+    {
+     "events": [
+      2,
+      3
+     ],
+     "label": "1 \u00b7 lift"
+    },
+    {
+     "events": [
+      4,
+      5,
+      6,
+      7
+     ],
+     "label": "launch"
+    }
    ]
   },
   {
    "name": "pg_storm",
    "title": "Storm",
-   "blurb": "Rain and a far roll, then thunder cracks left and a second strike answers.",
+   "blurb": "Rain and a far rumble, then a close strike cracks on the left and rolls away.",
    "tag": "scene",
    "controls": [
     {
      "kind": "pan",
      "events": [
-      1,
-      2
+      1
      ],
-     "label": "crack"
+     "label": "strike"
     },
     {
      "kind": "bed_db",
@@ -47983,10 +47966,8 @@
     {
      "kind": "seed",
      "events": [
-      1,
-      2,
-      3,
-      4
+      0,
+      1
      ],
      "label": "new thunder"
     }
@@ -48000,1133 +47981,1017 @@
     },
     {
      "events": [
-      1,
-      2,
-      3,
-      4
+      1
      ],
-     "label": "thunder"
-    },
-    {
-     "events": [
-      5,
-      6
-     ],
-     "label": "second strike"
+     "label": "close strike"
     }
    ],
-   "caption": "10.00-second dark cue, rain bed, with whoosh @0.40 3.00s -18dB R2 #31, click @4.00 0.08s -6dB L2 #32, impact @4.00 1.20s -2dB L2 #36, whoosh @4.02 2.50s -10dB C #34, sub drop @4.00 2.20s -6dB L1 #33, impact @7.20 1.20s -14dB R2 #37, sub drop @7.20 1.60s -16dB R2 #38",
+   "caption": "10.00-second dark cue, rain bed, with thunder @0.30 4.50s -16dB R2 #33, thunder @3.60 6.40s -4dB L2 #30",
    "spec": {
     "duration": 10.0,
     "texture": "rain",
     "mood": "dark",
     "events": [
      {
-      "role": "whoosh",
-      "t": 0.4,
-      "dur": 3.0,
-      "gain_db": -18.0,
+      "role": "thunder",
+      "t": 0.3,
+      "dur": 4.5,
+      "gain_db": -16.0,
       "pan": 0.5,
-      "seed": 49
-     },
-     {
-      "role": "click",
-      "t": 4.0,
-      "dur": 0.08,
-      "gain_db": -6.0,
-      "pan": -0.5,
-      "seed": 50
-     },
-     {
-      "role": "impact",
-      "t": 4.0,
-      "dur": 1.2,
-      "gain_db": -2.0,
-      "pan": -0.5,
-      "seed": 54
-     },
-     {
-      "role": "whoosh",
-      "t": 4.02,
-      "dur": 2.5,
-      "gain_db": -10.0,
-      "pan": 0.0,
-      "seed": 52
-     },
-     {
-      "role": "sub_drop",
-      "t": 4.0,
-      "dur": 2.2,
-      "gain_db": -6.0,
-      "pan": -0.25,
       "seed": 51
      },
      {
-      "role": "impact",
-      "t": 7.2,
-      "dur": 1.2,
-      "gain_db": -14.0,
-      "pan": 0.5,
-      "seed": 55
-     },
-     {
-      "role": "sub_drop",
-      "t": 7.2,
-      "dur": 1.6,
-      "gain_db": -16.0,
-      "pan": 0.5,
-      "seed": 56
+      "role": "thunder",
+      "t": 3.6,
+      "dur": 6.4,
+      "gain_db": -4.0,
+      "pan": -0.5,
+      "seed": 48
      }
     ],
     "bed_db": -28.0
    },
-   "hash": "b4bed0511b07953e",
+   "hash": "f6ec32c2b0c68a5c",
    "audio": "assets/audio/pg_storm.mp3",
    "duration": 10.0,
    "detail": false,
    "planner_exact": false,
    "audit": {
-    "peak": 0.657284,
-    "rms_dbfs": -26.188603,
-    "dc": -4e-05,
-    "max_jump": 0.18249,
-    "click_score": 0.277643,
-    "onset": 0.025583,
-    "spectral_centroid": 2427.706181,
+    "peak": 0.646538,
+    "rms_dbfs": -25.234405,
+    "dc": -0.0,
+    "max_jump": 0.029636,
+    "click_score": 0.045837,
+    "onset": 0.333125,
+    "spectral_centroid": 1313.647625,
     "clipped_fraction": 0.0
    },
    "passes": true,
    "peaks": [
     [
-     -0.016,
-     0.016
+     -0.01,
+     0.01
     ],
     [
-     -0.019,
-     0.02
+     -0.012,
+     0.012
     ],
     [
-     -0.017,
-     0.018
+     -0.01,
+     0.011
+    ],
+    [
+     -0.009,
+     0.011
+    ],
+    [
+     -0.009,
+     0.009
+    ],
+    [
+     -0.009,
+     0.009
+    ],
+    [
+     -0.01,
+     0.009
     ],
     [
      -0.014,
-     0.018
-    ],
-    [
-     -0.014,
-     0.015
-    ],
-    [
-     -0.014,
-     0.014
-    ],
-    [
-     -0.016,
-     0.014
-    ],
-    [
-     -0.021,
-     0.015
-    ],
-    [
-     -0.019,
-     0.018
-    ],
-    [
-     -0.025,
-     0.022
-    ],
-    [
-     -0.023,
-     0.024
-    ],
-    [
-     -0.029,
-     0.033
-    ],
-    [
-     -0.05,
-     0.051
-    ],
-    [
-     -0.053,
-     0.08
-    ],
-    [
-     -0.063,
-     0.053
-    ],
-    [
-     -0.063,
-     0.063
-    ],
-    [
-     -0.056,
-     0.06
-    ],
-    [
-     -0.062,
-     0.054
-    ],
-    [
-     -0.05,
-     0.061
-    ],
-    [
-     -0.051,
-     0.051
-    ],
-    [
-     -0.052,
-     0.06
-    ],
-    [
-     -0.051,
-     0.044
-    ],
-    [
-     -0.052,
-     0.039
-    ],
-    [
-     -0.042,
-     0.055
-    ],
-    [
-     -0.049,
-     0.041
-    ],
-    [
-     -0.048,
-     0.052
-    ],
-    [
-     -0.041,
-     0.035
-    ],
-    [
-     -0.028,
-     0.044
-    ],
-    [
-     -0.041,
-     0.037
-    ],
-    [
-     -0.034,
-     0.032
+     0.012
     ],
     [
      -0.027,
-     0.03
-    ],
-    [
-     -0.028,
-     0.032
-    ],
-    [
-     -0.033,
-     0.03
-    ],
-    [
-     -0.035,
-     0.034
-    ],
-    [
-     -0.035,
-     0.027
-    ],
-    [
-     -0.026,
-     0.029
-    ],
-    [
-     -0.03,
-     0.028
-    ],
-    [
-     -0.032,
-     0.028
-    ],
-    [
-     -0.029,
-     0.026
-    ],
-    [
-     -0.025,
-     0.026
-    ],
-    [
-     -0.03,
-     0.028
-    ],
-    [
-     -0.024,
-     0.026
-    ],
-    [
-     -0.028,
-     0.023
-    ],
-    [
-     -0.029,
-     0.025
-    ],
-    [
-     -0.026,
-     0.025
-    ],
-    [
-     -0.025,
-     0.022
-    ],
-    [
-     -0.021,
-     0.025
-    ],
-    [
-     -0.021,
-     0.031
-    ],
-    [
-     -0.02,
-     0.026
-    ],
-    [
-     -0.03,
-     0.021
-    ],
-    [
-     -0.022,
-     0.019
-    ],
-    [
-     -0.028,
-     0.032
-    ],
-    [
-     -0.024,
-     0.019
-    ],
-    [
-     -0.026,
-     0.022
-    ],
-    [
-     -0.03,
-     0.022
-    ],
-    [
-     -0.024,
-     0.03
-    ],
-    [
-     -0.024,
-     0.027
-    ],
-    [
-     -0.023,
-     0.021
-    ],
-    [
-     -0.025,
-     0.02
-    ],
-    [
-     -0.021,
-     0.023
-    ],
-    [
-     -0.022,
-     0.024
-    ],
-    [
-     -0.025,
-     0.023
-    ],
-    [
-     -0.021,
-     0.02
-    ],
-    [
-     -0.024,
-     0.022
-    ],
-    [
-     -0.02,
-     0.031
-    ],
-    [
-     -0.022,
-     0.023
-    ],
-    [
-     -0.022,
-     0.023
-    ],
-    [
-     -0.026,
-     0.021
-    ],
-    [
-     -0.022,
-     0.023
-    ],
-    [
-     -0.02,
      0.025
     ],
     [
      -0.019,
-     0.023
-    ],
-    [
-     -0.019,
      0.021
     ],
     [
-     -0.023,
-     0.022
-    ],
-    [
      -0.02,
-     0.019
+     0.018
     ],
     [
-     -0.022,
-     0.023
-    ],
-    [
-     -0.02,
-     0.023
-    ],
-    [
-     -0.027,
-     0.024
-    ],
-    [
-     -0.026,
-     0.023
-    ],
-    [
-     -0.021,
-     0.026
-    ],
-    [
-     -0.022,
-     0.024
-    ],
-    [
-     -0.02,
-     0.019
-    ],
-    [
-     -0.023,
-     0.02
-    ],
-    [
-     -0.022,
-     0.02
-    ],
-    [
-     -0.02,
-     0.022
-    ],
-    [
-     -0.024,
-     0.027
-    ],
-    [
-     -0.022,
-     0.028
-    ],
-    [
-     -0.022,
-     0.023
-    ],
-    [
-     -0.032,
-     0.026
-    ],
-    [
-     -0.019,
-     0.025
-    ],
-    [
-     -0.024,
-     0.021
-    ],
-    [
-     -0.025,
-     0.021
-    ],
-    [
-     -0.026,
-     0.022
-    ],
-    [
-     -0.021,
-     0.021
-    ],
-    [
-     -0.022,
-     0.023
-    ],
-    [
-     -0.023,
-     0.031
-    ],
-    [
-     -0.025,
-     0.022
-    ],
-    [
-     -0.46,
-     0.657
-    ],
-    [
-     -0.507,
-     0.353
-    ],
-    [
-     -0.522,
-     0.573
-    ],
-    [
-     -0.383,
-     0.557
-    ],
-    [
-     -0.39,
-     0.479
-    ],
-    [
-     -0.424,
-     0.414
-    ],
-    [
-     -0.398,
-     0.355
-    ],
-    [
-     -0.352,
-     0.29
-    ],
-    [
-     -0.321,
-     0.244
-    ],
-    [
-     -0.312,
-     0.295
-    ],
-    [
-     -0.328,
-     0.267
-    ],
-    [
-     -0.308,
-     0.254
-    ],
-    [
-     -0.236,
-     0.224
-    ],
-    [
-     -0.23,
-     0.202
-    ],
-    [
-     -0.173,
-     0.166
-    ],
-    [
-     -0.162,
-     0.214
-    ],
-    [
-     -0.175,
-     0.19
-    ],
-    [
-     -0.174,
-     0.156
-    ],
-    [
-     -0.12,
-     0.148
-    ],
-    [
-     -0.136,
-     0.148
-    ],
-    [
-     -0.137,
-     0.135
-    ],
-    [
-     -0.099,
-     0.099
-    ],
-    [
-     -0.123,
-     0.116
-    ],
-    [
-     -0.11,
-     0.112
-    ],
-    [
-     -0.114,
-     0.098
-    ],
-    [
-     -0.098,
-     0.089
-    ],
-    [
-     -0.096,
-     0.115
-    ],
-    [
-     -0.089,
-     0.081
-    ],
-    [
-     -0.073,
-     0.087
-    ],
-    [
-     -0.076,
-     0.064
-    ],
-    [
-     -0.067,
-     0.073
-    ],
-    [
-     -0.062,
-     0.061
-    ],
-    [
-     -0.065,
-     0.067
-    ],
-    [
-     -0.049,
-     0.048
-    ],
-    [
-     -0.05,
-     0.06
-    ],
-    [
-     -0.051,
-     0.046
-    ],
-    [
-     -0.045,
-     0.046
-    ],
-    [
-     -0.051,
+     -0.075,
      0.057
     ],
     [
-     -0.05,
-     0.044
+     -0.079,
+     0.073
     ],
     [
-     -0.044,
-     0.044
+     -0.052,
+     0.054
     ],
     [
-     -0.041,
-     0.051
+     -0.042,
+     0.056
     ],
     [
-     -0.044,
-     0.043
-    ],
-    [
-     -0.044,
-     0.039
-    ],
-    [
-     -0.038,
-     0.04
-    ],
-    [
-     -0.036,
-     0.033
-    ],
-    [
-     -0.038,
-     0.04
-    ],
-    [
-     -0.038,
-     0.039
-    ],
-    [
-     -0.03,
-     0.036
-    ],
-    [
-     -0.036,
-     0.032
-    ],
-    [
-     -0.037,
+     -0.029,
      0.037
     ],
     [
-     -0.032,
-     0.03
+     -0.052,
+     0.058
     ],
     [
-     -0.027,
-     0.029
+     -0.065,
+     0.062
     ],
     [
-     -0.03,
-     0.024
+     -0.087,
+     0.075
     ],
     [
-     -0.026,
-     0.023
+     -0.148,
+     0.08
     ],
     [
-     -0.021,
-     0.032
+     -0.094,
+     0.096
     ],
     [
-     -0.02,
-     0.022
+     -0.076,
+     0.104
     ],
     [
-     -0.024,
-     0.033
+     -0.09,
+     0.119
     ],
     [
-     -0.019,
-     0.02
+     -0.07,
+     0.091
     ],
     [
-     -0.023,
-     0.021
+     -0.092,
+     0.067
     ],
     [
-     -0.037,
-     0.026
+     -0.07,
+     0.088
     ],
     [
-     -0.022,
-     0.02
+     -0.05,
+     0.084
     ],
     [
-     -0.02,
-     0.016
+     -0.095,
+     0.063
     ],
     [
-     -0.02,
-     0.019
+     -0.052,
+     0.056
     ],
     [
-     -0.033,
-     0.023
-    ],
-    [
-     -0.022,
-     0.021
-    ],
-    [
-     -0.023,
-     0.019
-    ],
-    [
-     -0.02,
-     0.017
-    ],
-    [
-     -0.021,
-     0.021
-    ],
-    [
-     -0.022,
-     0.017
-    ],
-    [
-     -0.019,
-     0.021
-    ],
-    [
-     -0.021,
-     0.018
-    ],
-    [
-     -0.022,
-     0.02
-    ],
-    [
-     -0.022,
-     0.03
-    ],
-    [
-     -0.02,
-     0.02
-    ],
-    [
-     -0.019,
-     0.022
-    ],
-    [
-     -0.024,
-     0.024
-    ],
-    [
-     -0.03,
-     0.155
-    ],
-    [
-     -0.14,
-     0.148
-    ],
-    [
-     -0.173,
-     0.17
-    ],
-    [
-     -0.142,
-     0.133
-    ],
-    [
-     -0.117,
-     0.125
-    ],
-    [
-     -0.082,
-     0.093
-    ],
-    [
-     -0.085,
-     0.082
-    ],
-    [
-     -0.089,
+     -0.064,
      0.065
     ],
     [
      -0.081,
-     0.06
+     0.064
     ],
     [
-     -0.067,
-     0.061
+     -0.076,
+     0.053
     ],
     [
-     -0.055,
+     -0.069,
+     0.09
+    ],
+    [
+     -0.066,
+     0.056
+    ],
+    [
+     -0.083,
      0.059
     ],
     [
-     -0.051,
-     0.062
+     -0.047,
+     0.045
     ],
     [
-     -0.054,
-     0.062
+     -0.056,
+     0.071
     ],
     [
-     -0.054,
-     0.046
+     -0.075,
+     0.064
     ],
     [
-     -0.04,
-     0.055
+     -0.06,
+     0.059
     ],
     [
-     -0.044,
-     0.05
-    ],
-    [
-     -0.038,
-     0.042
-    ],
-    [
-     -0.04,
-     0.038
-    ],
-    [
-     -0.045,
-     0.037
-    ],
-    [
-     -0.034,
+     -0.033,
      0.035
     ],
     [
-     -0.031,
+     -0.042,
+     0.039
+    ],
+    [
+     -0.042,
+     0.038
+    ],
+    [
+     -0.028,
+     0.034
+    ],
+    [
+     -0.032,
+     0.037
+    ],
+    [
+     -0.028,
+     0.055
+    ],
+    [
+     -0.029,
      0.03
     ],
     [
-     -0.036,
-     0.029
+     -0.026,
+     0.031
     ],
     [
-     -0.034,
-     0.033
+     -0.028,
+     0.022
     ],
     [
-     -0.034,
-     0.028
-    ],
-    [
-     -0.03,
-     0.026
+     -0.022,
+     0.023
     ],
     [
      -0.026,
-     0.032
-    ],
-    [
-     -0.028,
-     0.023
-    ],
-    [
-     -0.027,
-     0.022
-    ],
-    [
-     -0.027,
-     0.024
-    ],
-    [
-     -0.028,
-     0.026
-    ],
-    [
-     -0.025,
-     0.026
+     0.031
     ],
     [
      -0.023,
-     0.023
-    ],
-    [
-     -0.023,
-     0.023
-    ],
-    [
-     -0.022,
-     0.024
-    ],
-    [
-     -0.025,
-     0.024
-    ],
-    [
-     -0.02,
-     0.02
-    ],
-    [
-     -0.023,
-     0.028
-    ],
-    [
-     -0.02,
-     0.024
-    ],
-    [
-     -0.02,
-     0.022
-    ],
-    [
-     -0.02,
-     0.021
-    ],
-    [
-     -0.023,
-     0.021
-    ],
-    [
-     -0.022,
-     0.022
-    ],
-    [
-     -0.019,
-     0.021
-    ],
-    [
-     -0.02,
-     0.021
-    ],
-    [
-     -0.023,
-     0.022
-    ],
-    [
-     -0.025,
-     0.019
-    ],
-    [
-     -0.02,
-     0.022
-    ],
-    [
-     -0.022,
-     0.023
-    ],
-    [
-     -0.02,
-     0.024
-    ],
-    [
-     -0.022,
-     0.022
-    ],
-    [
-     -0.023,
-     0.02
-    ],
-    [
-     -0.02,
-     0.018
-    ],
-    [
-     -0.02,
-     0.023
-    ],
-    [
-     -0.019,
-     0.021
+     0.025
     ],
     [
      -0.021,
-     0.02
+     0.021
+    ],
+    [
+     -0.018,
+     0.016
     ],
     [
      -0.019,
-     0.025
+     0.017
+    ],
+    [
+     -0.017,
+     0.019
+    ],
+    [
+     -0.024,
+     0.027
+    ],
+    [
+     -0.024,
+     0.023
+    ],
+    [
+     -0.022,
+     0.019
+    ],
+    [
+     -0.019,
+     0.018
+    ],
+    [
+     -0.018,
+     0.022
+    ],
+    [
+     -0.017,
+     0.022
+    ],
+    [
+     -0.023,
+     0.023
+    ],
+    [
+     -0.022,
+     0.021
+    ],
+    [
+     -0.024,
+     0.027
+    ],
+    [
+     -0.029,
+     0.018
+    ],
+    [
+     -0.017,
+     0.018
+    ],
+    [
+     -0.025,
+     0.02
+    ],
+    [
+     -0.027,
+     0.021
+    ],
+    [
+     -0.022,
+     0.022
+    ],
+    [
+     -0.017,
+     0.024
     ],
     [
      -0.024,
      0.022
     ],
     [
-     -0.02,
-     0.018
+     -0.021,
+     0.025
     ],
     [
-     -0.02,
+     -0.023,
      0.023
     ],
     [
-     -0.019,
-     0.02
+     -0.02,
+     0.022
     ],
     [
-     -0.017,
-     0.015
+     -0.025,
+     0.023
     ],
     [
-     -0.015,
-     0.018
-    ],
-    [
-     -0.014,
-     0.018
-    ],
-    [
-     -0.014,
-     0.014
-    ],
-    [
-     -0.015,
-     0.014
+     -0.023,
+     0.023
     ],
     [
      -0.021,
-     0.015
+     0.023
+    ],
+    [
+     -0.018,
+     0.02
+    ],
+    [
+     -0.023,
+     0.023
+    ],
+    [
+     -0.018,
+     0.016
+    ],
+    [
+     -0.02,
+     0.02
+    ],
+    [
+     -0.018,
+     0.022
+    ],
+    [
+     -0.02,
+     0.024
+    ],
+    [
+     -0.019,
+     0.018
+    ],
+    [
+     -0.017,
+     0.026
+    ],
+    [
+     -0.022,
+     0.019
+    ],
+    [
+     -0.027,
+     0.022
+    ],
+    [
+     -0.517,
+     0.647
+    ],
+    [
+     -0.244,
+     0.304
+    ],
+    [
+     -0.16,
+     0.126
+    ],
+    [
+     -0.161,
+     0.138
+    ],
+    [
+     -0.176,
+     0.171
+    ],
+    [
+     -0.385,
+     0.294
+    ],
+    [
+     -0.289,
+     0.431
+    ],
+    [
+     -0.283,
+     0.408
+    ],
+    [
+     -0.273,
+     0.293
+    ],
+    [
+     -0.301,
+     0.53
+    ],
+    [
+     -0.468,
+     0.475
+    ],
+    [
+     -0.425,
+     0.298
+    ],
+    [
+     -0.256,
+     0.278
+    ],
+    [
+     -0.277,
+     0.28
+    ],
+    [
+     -0.305,
+     0.319
+    ],
+    [
+     -0.197,
+     0.154
+    ],
+    [
+     -0.256,
+     0.221
+    ],
+    [
+     -0.146,
+     0.197
+    ],
+    [
+     -0.185,
+     0.215
+    ],
+    [
+     -0.268,
+     0.166
+    ],
+    [
+     -0.281,
+     0.229
+    ],
+    [
+     -0.218,
+     0.201
+    ],
+    [
+     -0.233,
+     0.234
+    ],
+    [
+     -0.158,
+     0.282
+    ],
+    [
+     -0.259,
+     0.275
+    ],
+    [
+     -0.265,
+     0.231
+    ],
+    [
+     -0.321,
+     0.214
+    ],
+    [
+     -0.211,
+     0.19
+    ],
+    [
+     -0.161,
+     0.107
+    ],
+    [
+     -0.158,
+     0.208
+    ],
+    [
+     -0.175,
+     0.185
+    ],
+    [
+     -0.238,
+     0.174
+    ],
+    [
+     -0.163,
+     0.247
+    ],
+    [
+     -0.311,
+     0.261
+    ],
+    [
+     -0.185,
+     0.193
+    ],
+    [
+     -0.236,
+     0.228
+    ],
+    [
+     -0.222,
+     0.172
+    ],
+    [
+     -0.218,
+     0.178
+    ],
+    [
+     -0.167,
+     0.188
+    ],
+    [
+     -0.199,
+     0.248
+    ],
+    [
+     -0.177,
+     0.162
+    ],
+    [
+     -0.208,
+     0.194
+    ],
+    [
+     -0.164,
+     0.146
+    ],
+    [
+     -0.186,
+     0.187
+    ],
+    [
+     -0.114,
+     0.124
+    ],
+    [
+     -0.116,
+     0.117
+    ],
+    [
+     -0.135,
+     0.146
+    ],
+    [
+     -0.106,
+     0.137
+    ],
+    [
+     -0.12,
+     0.229
+    ],
+    [
+     -0.125,
+     0.107
+    ],
+    [
+     -0.156,
+     0.17
+    ],
+    [
+     -0.125,
+     0.12
+    ],
+    [
+     -0.128,
+     0.098
+    ],
+    [
+     -0.234,
+     0.239
+    ],
+    [
+     -0.149,
+     0.179
+    ],
+    [
+     -0.149,
+     0.148
+    ],
+    [
+     -0.158,
+     0.226
+    ],
+    [
+     -0.135,
+     0.15
+    ],
+    [
+     -0.242,
+     0.166
+    ],
+    [
+     -0.123,
+     0.122
+    ],
+    [
+     -0.119,
+     0.148
+    ],
+    [
+     -0.172,
+     0.156
+    ],
+    [
+     -0.127,
+     0.107
+    ],
+    [
+     -0.118,
+     0.137
+    ],
+    [
+     -0.196,
+     0.133
+    ],
+    [
+     -0.113,
+     0.132
+    ],
+    [
+     -0.178,
+     0.131
+    ],
+    [
+     -0.101,
+     0.133
+    ],
+    [
+     -0.138,
+     0.181
+    ],
+    [
+     -0.097,
+     0.135
+    ],
+    [
+     -0.096,
+     0.091
+    ],
+    [
+     -0.162,
+     0.119
+    ],
+    [
+     -0.094,
+     0.091
+    ],
+    [
+     -0.083,
+     0.094
+    ],
+    [
+     -0.123,
+     0.192
+    ],
+    [
+     -0.214,
+     0.192
+    ],
+    [
+     -0.147,
+     0.073
+    ],
+    [
+     -0.118,
+     0.125
+    ],
+    [
+     -0.155,
+     0.184
+    ],
+    [
+     -0.095,
+     0.17
+    ],
+    [
+     -0.123,
+     0.151
+    ],
+    [
+     -0.256,
+     0.186
+    ],
+    [
+     -0.17,
+     0.163
+    ],
+    [
+     -0.175,
+     0.15
+    ],
+    [
+     -0.165,
+     0.188
+    ],
+    [
+     -0.157,
+     0.12
+    ],
+    [
+     -0.166,
+     0.158
+    ],
+    [
+     -0.154,
+     0.224
+    ],
+    [
+     -0.127,
+     0.131
+    ],
+    [
+     -0.098,
+     0.164
+    ],
+    [
+     -0.154,
+     0.142
+    ],
+    [
+     -0.139,
+     0.2
+    ],
+    [
+     -0.122,
+     0.141
+    ],
+    [
+     -0.114,
+     0.179
+    ],
+    [
+     -0.147,
+     0.137
+    ],
+    [
+     -0.128,
+     0.1
+    ],
+    [
+     -0.141,
+     0.15
+    ],
+    [
+     -0.102,
+     0.177
+    ],
+    [
+     -0.088,
+     0.118
+    ],
+    [
+     -0.086,
+     0.074
+    ],
+    [
+     -0.091,
+     0.083
+    ],
+    [
+     -0.105,
+     0.077
+    ],
+    [
+     -0.083,
+     0.098
+    ],
+    [
+     -0.076,
+     0.071
+    ],
+    [
+     -0.069,
+     0.074
+    ],
+    [
+     -0.079,
+     0.058
+    ],
+    [
+     -0.063,
+     0.065
+    ],
+    [
+     -0.052,
+     0.046
+    ],
+    [
+     -0.057,
+     0.06
+    ],
+    [
+     -0.059,
+     0.053
+    ],
+    [
+     -0.056,
+     0.076
+    ],
+    [
+     -0.066,
+     0.053
+    ],
+    [
+     -0.067,
+     0.06
+    ],
+    [
+     -0.048,
+     0.033
+    ],
+    [
+     -0.042,
+     0.047
+    ],
+    [
+     -0.048,
+     0.057
+    ],
+    [
+     -0.04,
+     0.045
+    ],
+    [
+     -0.029,
+     0.032
+    ],
+    [
+     -0.029,
+     0.031
+    ],
+    [
+     -0.034,
+     0.035
+    ],
+    [
+     -0.039,
+     0.041
+    ],
+    [
+     -0.026,
+     0.028
+    ],
+    [
+     -0.045,
+     0.041
+    ],
+    [
+     -0.029,
+     0.028
+    ],
+    [
+     -0.029,
+     0.025
+    ],
+    [
+     -0.029,
+     0.034
+    ],
+    [
+     -0.032,
+     0.028
+    ],
+    [
+     -0.027,
+     0.025
+    ],
+    [
+     -0.025,
+     0.022
+    ],
+    [
+     -0.019,
+     0.019
+    ],
+    [
+     -0.019,
+     0.023
+    ],
+    [
+     -0.023,
+     0.016
+    ],
+    [
+     -0.016,
+     0.016
     ],
     [
      -0.014,
+     0.017
+    ],
+    [
+     -0.019,
+     0.015
+    ],
+    [
+     -0.016,
+     0.016
+    ],
+    [
+     -0.013,
+     0.013
+    ],
+    [
+     -0.013,
+     0.013
+    ],
+    [
+     -0.014,
+     0.015
+    ],
+    [
+     -0.013,
      0.014
     ],
     [
+     -0.013,
+     0.015
+    ],
+    [
+     -0.015,
+     0.014
+    ],
+    [
+     -0.013,
+     0.013
+    ],
+    [
+     -0.013,
+     0.015
+    ],
+    [
+     -0.012,
+     0.013
+    ],
+    [
+     -0.011,
+     0.01
+    ],
+    [
      -0.009,
-     0.006
+     0.011
+    ],
+    [
+     -0.009,
+     0.011
+    ],
+    [
+     -0.009,
+     0.009
+    ],
+    [
+     -0.009,
+     0.009
+    ],
+    [
+     -0.013,
+     0.009
+    ],
+    [
+     -0.009,
+     0.009
+    ],
+    [
+     -0.005,
+     0.004
     ]
    ]
   },
   {
    "name": "pg_airlock",
-   "title": "Airlock",
-   "blurb": "Warning, latch, the vent hisses, the door slides, seals and locks.",
-   "tag": "scene",
-   "controls": [
-    {
-     "kind": "gain",
-     "events": [
-      3
-     ],
-     "label": "vent level",
-     "min": -28,
-     "max": -4
-    },
-    {
-     "kind": "pan",
-     "events": [
-      5,
-      6
-     ],
-     "label": "seal"
-    },
-    {
-     "kind": "texture",
-     "label": "bed",
-     "options": [
-      "sci_fi",
-      "room_cold",
-      "none"
-     ]
-    }
-   ],
-   "marks": [
-    {
-     "events": [
-      0
-     ],
-     "label": "warn"
-    },
-    {
-     "events": [
-      1,
-      2
-     ],
-     "label": "latch"
-    },
-    {
-     "events": [
-      3
-     ],
-     "label": "vent"
-    },
-    {
-     "events": [
-      4
-     ],
-     "label": "slide"
-    },
-    {
-     "events": [
-      5,
-      6,
-      7
-     ],
-     "label": "seal"
-    }
-   ],
    "caption": "7.00-second eerie cue, sci fi bed, with bell @0.30 1.00s -16dB C #3d, click @1.20 0.08s -12dB L2 #41, click @1.35 0.08s -14dB R2 #42, noise sweep @1.60 2.20s -14dB C #97, whoosh @3.80 1.20s -8dB C #2b, impact @4.90 0.90s -6dB C #1f, sub drop @4.90 1.40s -10dB C #88, click @5.30 0.10s -14dB C #43",
    "spec": {
     "duration": 7.0,
@@ -50177,58 +50042,76 @@
      -0.001,
      0.001
     ]
-   ]
-  },
-  {
-   "name": "pg_glitch",
-   "title": "Glitch",
-   "blurb": "A digital stutter, an inhale, a landing. Built to cut into anything.",
-   "tag": "stinger",
+   ],
+   "title": "Airlock",
+   "blurb": "Warning, latch, the vent hisses, the door slides, seals and locks.",
+   "tag": "scene",
    "controls": [
-    {
-     "kind": "seed",
-     "events": [
-      0,
-      1,
-      3
-     ],
-     "label": "new stutter"
-    },
     {
      "kind": "gain",
      "events": [
-      7
+      3
      ],
-     "label": "sub weight",
-     "min": -24,
-     "max": -2
+     "label": "vent level",
+     "min": -28,
+     "max": -4
+    },
+    {
+     "kind": "pan",
+     "events": [
+      5,
+      6
+     ],
+     "label": "seal"
+    },
+    {
+     "kind": "texture",
+     "label": "bed",
+     "options": [
+      "sci_fi",
+      "room_cold",
+      "none"
+     ]
     }
    ],
    "marks": [
     {
      "events": [
-      0,
+      0
+     ],
+     "label": "warn"
+    },
+    {
+     "events": [
       1,
-      2,
-      3,
+      2
+     ],
+     "label": "latch"
+    },
+    {
+     "events": [
+      3
+     ],
+     "label": "vent"
+    },
+    {
+     "events": [
       4
      ],
-     "label": "stutter"
+     "label": "slide"
     },
     {
      "events": [
-      5
-     ],
-     "label": "inhale"
-    },
-    {
-     "events": [
+      5,
       6,
       7
      ],
-     "label": "land"
+     "label": "seal"
     }
-   ],
+   ]
+  },
+  {
+   "name": "pg_glitch",
    "caption": "3.00-second intense cue, no bed, with glitch @0.10 0.05s -12dB C #b4, glitch @0.24 0.04s -14dB C #5c, click @0.36 0.05s -12dB L4 #11, glitch @0.46 0.08s -12dB C #3e, click @0.66 0.05s -12dB R4 #12, riser @0.75 0.48s -12dB C #77, impact @1.20 0.70s -4dB C #66, sub drop @1.20 1.40s -8dB C #88",
    "spec": {
     "duration": 3.0,
@@ -51278,61 +51161,58 @@
      -0.0,
      0.0
     ]
-   ]
-  },
-  {
-   "name": "pg_notify",
-   "title": "Notify",
-   "blurb": "Click, two pops and a bell. No bed: the gaps are true silence.",
-   "tag": "basic",
+   ],
+   "title": "Glitch",
+   "blurb": "A digital stutter, an inhale, a landing. Built to cut into anything.",
+   "tag": "stinger",
    "controls": [
     {
-     "kind": "pan",
+     "kind": "seed",
      "events": [
-      2
+      0,
+      1,
+      3
      ],
-     "label": "second pop"
+     "label": "new stutter"
     },
     {
      "kind": "gain",
      "events": [
-      3
+      7
      ],
-     "label": "bell level",
-     "min": -30,
-     "max": -4
-    },
-    {
-     "kind": "texture",
-     "label": "bed",
-     "options": [
-      "none",
-      "vinyl",
-      "room_cold"
-     ]
+     "label": "sub weight",
+     "min": -24,
+     "max": -2
     }
    ],
    "marks": [
     {
      "events": [
       0,
-      1
+      1,
+      2,
+      3,
+      4
      ],
-     "label": "tap"
+     "label": "stutter"
     },
     {
      "events": [
-      2
+      5
      ],
-     "label": "pop"
+     "label": "inhale"
     },
     {
      "events": [
-      3
+      6,
+      7
      ],
-     "label": "bell"
+     "label": "land"
     }
-   ],
+   ]
+  },
+  {
+   "name": "pg_notify",
    "caption": "2.50-second bright cue, no bed, with click @0.12 0.06s -14dB L1 #21, ui pop @0.20 0.16s -10dB L1 #22, ui pop @0.38 0.16s -8dB R1 #23, bell @0.56 1.40s -16dB C #24",
    "spec": {
     "duration": 2.5,
@@ -52350,6 +52230,57 @@
      -0.0,
      0.0
     ]
+   ],
+   "title": "Notify",
+   "blurb": "Click, two pops and a bell. No bed: the gaps are true silence.",
+   "tag": "basic",
+   "controls": [
+    {
+     "kind": "pan",
+     "events": [
+      2
+     ],
+     "label": "second pop"
+    },
+    {
+     "kind": "gain",
+     "events": [
+      3
+     ],
+     "label": "bell level",
+     "min": -30,
+     "max": -4
+    },
+    {
+     "kind": "texture",
+     "label": "bed",
+     "options": [
+      "none",
+      "vinyl",
+      "room_cold"
+     ]
+    }
+   ],
+   "marks": [
+    {
+     "events": [
+      0,
+      1
+     ],
+     "label": "tap"
+    },
+    {
+     "events": [
+      2
+     ],
+     "label": "pop"
+    },
+    {
+     "events": [
+      3
+     ],
+     "label": "bell"
+    }
    ]
   }
  ],

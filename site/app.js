@@ -1496,7 +1496,9 @@
         const e = s.events[i];
         const prev = jit[i] || { f: 1, g: 0 };
         let seed;
-        do { seed = Math.floor(Math.random() * 256); } while (seed === e.seed);
+        // Thunder keeps its distance (seed % 4); everything else re-rolls freely.
+        const keep = e.role === "thunder" ? 3 : 0;
+        do { seed = (Math.floor(Math.random() * 256) & ~keep) | (e.seed & keep); } while (seed === e.seed);
         e.seed = seed;
         const baseDur = e.dur / prev.f;
         if (e.role in APEX) {

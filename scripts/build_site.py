@@ -172,8 +172,8 @@ LIBRARY = [
     cue("Scenes", "storm", "Rain + distant thunder",
         "Ambience for focus videos, scene background.",
         {"duration": 8.0, "texture": "rain", "mood": "calm",
-         "events": [ev("swell", 1.0, 3.0, -20, 0, 151), ev("sub_drop", 4.0, 3.0, -12, 0, 152),
-                    ev("noise_sweep", 4.0, 2.5, -20, -0.25, 153), ev("impact", 4.05, 0.9, -14, 0.25, 154)]}),
+         # The real thunder role: seed % 4 = 3 is a far rumble, 2 a mid-distance roll.
+         "events": [ev("thunder", 0.6, 6.0, -10, -0.25, 0x0f), ev("thunder", 4.4, 3.6, -16, 0.5, 0x0e)]}),
     # Physically modelled natural and foley roles (orb.render.foley). The seed
     # picks the variant: thunder seed % 4 is distance (0 close crack .. 3 far
     # rumble), footsteps seed % 3 the floor, explosion seed % 3 the distance.
@@ -357,9 +357,9 @@ BLOCKS = [
 # - launch: a three-click countdown, panned L R L at 1 s spacing, the riser
 #   starts on "1" and peaks at 4.26 s, then impact + sub + a long whoosh
 #   tail with a quiet bell shimmer. No bed: the countdown sits in silence.
-# - storm: rain at -28 dB; a distant roll (low whoosh), then at 4.0 s the
-#   crack (click + impact, left), a decaying whoosh roll and a sub; a far
-#   second strike answers right at 7.2 s.
+# - storm: rain at -28 dB; a far thunder rumble on the right, then at 3.6 s
+#   a close strike on the left (the thunder role's crack, rumble and long
+#   low tail). Both are the physically modelled thunder, no synth stand-ins.
 # - airlock: warning bell, two latch clicks (L then R), the vent alone
 #   (noise_sweep), the door slides (whoosh), and the seal (impact + sub)
 #   locks with a click. Eight events, the grammar's maximum.
@@ -431,26 +431,22 @@ PLAYGROUND = [
         "name": "pg_storm",
         "title": "Storm",
         "tag": "scene",
-        "blurb": "Rain and a far roll, then thunder cracks left and a second strike answers.",
+        "blurb": "Rain and a far rumble, then a close strike cracks on the left and rolls away.",
         "spec": {"duration": 10.0, "texture": "rain", "mood": "dark", "bed_db": -28.0,
+                 # All real thunder (orb.render.foley): seed % 4 is distance,
+                 # 3 far rumble, 0 close crack, 2 mid.
                  "events": [
-                     ev("whoosh", 0.4, 3.0, -18.0, 0.5, 0x31),
-                     ev("click", 4.0, 0.08, -6.0, -0.5, 0x32),
-                     ev("impact", 4.0, 1.2, -2.0, -0.5, 0x36),
-                     ev("whoosh", 4.02, 2.5, -10.0, 0.0, 0x34),
-                     ev("sub_drop", 4.0, 2.2, -6.0, -0.25, 0x33),
-                     ev("impact", 7.2, 1.2, -14.0, 0.5, 0x37),
-                     ev("sub_drop", 7.2, 1.6, -16.0, 0.5, 0x38),
+                     ev("thunder", 0.3, 4.5, -16.0, 0.5, 0x33),
+                     ev("thunder", 3.6, 6.4, -4.0, -0.5, 0x30),
                  ]},
         "marks": [
             {"events": [0], "label": "far roll"},
-            {"events": [1, 2, 3, 4], "label": "thunder"},
-            {"events": [5, 6], "label": "second strike"},
+            {"events": [1], "label": "close strike"},
         ],
         "controls": [
-            {"kind": "pan", "events": [1, 2], "label": "crack"},
+            {"kind": "pan", "events": [1], "label": "strike"},
             {"kind": "bed_db", "label": "rain", "min": -44, "max": -16},
-            {"kind": "seed", "events": [1, 2, 3, 4], "label": "new thunder"},
+            {"kind": "seed", "events": [0, 1], "label": "new thunder"},
         ],
     },
     {
