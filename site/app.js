@@ -214,7 +214,81 @@
 
   const engine = {
     worker: null, ready: false, failed: false, info: "", pending: new Map(), seq: 0,
+    // "server" when the page is served by web/server.py (the HF Space):
+    // planning and rendering go over HTTP and Pyodide never boots.
+    mode: "probe", probed: null, wantInit: false,
+    probe() {
+      if (this.probed) return this.probed;
+      const ctl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = setTimeout(() => ctl && ctl.abort(), 3000);
+      this.probed = fetch("api/health", { cache: "no-store", signal: ctl ? ctl.signal : undefined })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+        .then((j) => {
+          clearTimeout(timer);
+          this.mode = j && j.ok && j.mode === "server" ? "server" : "browser";
+          if (this.mode === "server") {
+            this.ready = true;
+            this.status("ready", "server engine ready");
+            document.querySelectorAll("[data-where]").forEach((n) => { n.textContent = "Both run on this server, about a second per sound."; });
+            document.querySelectorAll("[data-fine]").forEach((n) => { n.textContent = "Generation runs on this server. Every result downloads as a 48 kHz stereo WAV, and the same page runs fully in your browser at stdevmac.github.io/orb-audio."; });
+            document.dispatchEvent(new CustomEvent("orb:engine-ready"));
+          } else if (this.wantInit) {
+            this.init();
+          }
+          return this.mode;
+        });
+      return this.probed;
+    },
+    toBrowser() {
+      // The server went away mid-visit: fall back to the in-browser engine.
+      this.mode = "browser";
+      this.ready = false;
+      this.init();
+    },
+    async post(path, body) {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (r.status === 400) {
+        let m = "bad request";
+        try { m = (await r.json()).error || m; } catch (_) { /* keep */ }
+        const err = new Error(m);
+        err.badInput = true;
+        throw err;
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r;
+    },
+    async serverRender(spec, seed) {
+      const t0 = performance.now();
+      this.status("busy", "rendering");
+      const r = await this.post("api/render", { spec, seed: seed | 0 });
+      const buf = await r.arrayBuffer();
+      const dv = new DataView(buf);
+      const n = dv.getUint32(0, true);
+      const meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, n)));
+      const off = 4 + n + ((4 - ((4 + n) % 4)) % 4);
+      const i16 = new Int16Array(buf, off, (buf.byteLength - off) >> 1);
+      const pcm = new Float32Array(i16.length);
+      for (let i = 0; i < i16.length; i++) pcm[i] = i16[i] / 32767;
+      const wallMs = Math.round(performance.now() - t0);
+      this.status("ready", `rendered in ${wallMs} ms`);
+      return { pcm, channels: meta.channels, sampleRate: meta.sample_rate, ms: meta.ms, wallMs, peaks: meta.peaks,
+        spectrogram: meta.spectrogram, audit: meta.audit, passes: meta.passes };
+    },
+    async serverPlan(caption) {
+      const t0 = performance.now();
+      this.status("busy", "planning");
+      const r = await this.post("api/plan", { caption });
+      const out = await r.json();
+      const wallMs = Math.round(performance.now() - t0);
+      this.status("ready", out.planned ? `planned in ${wallMs} ms` : "caption read exactly");
+      return { type: "planned", wallMs, ...out };
+    },
     init() {
+      if (this.mode !== "browser") {
+        if (this.mode === "probe") { this.wantInit = true; this.probe(); }
+        return;
+      }
       if (this.worker || this.failed) return;
       try {
         this.worker = new Worker(`worker.js${DATA && DATA.py ? `?v=${DATA.py}` : ""}`);
@@ -256,7 +330,13 @@
         }
       }
     },
-    render(spec, seed = 0) {
+    async render(spec, seed = 0) {
+      if ((await this.probe()) === "server" && this.mode === "server") {
+        try { return await this.serverRender(spec, seed); } catch (err) { if (err.badInput) throw err; console.warn("server render failed, using the browser:", err); this.toBrowser(); }
+      }
+      return this.workerRender(spec, seed);
+    },
+    workerRender(spec, seed = 0) {
       this.init();
       if (this.failed) return Promise.reject(new Error("The in-browser engine could not start."));
       const id = ++this.seq;
@@ -268,7 +348,13 @@
     },
     /** Caption -> Spec. The first planned caption downloads the weights;
      * onProgress(loaded, total) follows that download. */
-    plan(caption, onProgress) {
+    async plan(caption, onProgress) {
+      if ((await this.probe()) === "server" && this.mode === "server") {
+        try { return await this.serverPlan(caption); } catch (err) { if (err.badInput) throw err; console.warn("server plan failed, using the browser:", err); this.toBrowser(); }
+      }
+      return this.workerPlan(caption, onProgress);
+    },
+    workerPlan(caption, onProgress) {
       this.init();
       if (this.failed) return Promise.reject(new Error("The in-browser engine could not start."));
       if (!DATA.planner) return Promise.reject(new Error("This build of the page ships no planner weights."));
@@ -650,6 +736,44 @@
     return new Blob([buf], { type: "audio/wav" });
   }
 
+  function slug(text, fallback = "sound") {
+    let s = String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (s.length > 48) s = s.slice(0, 48).replace(/-[^-]*$/, "");
+    return s || fallback;
+  }
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = el("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  /** AudioBuffer -> interleaved PCM -> WAV blob. */
+  function bufferWav(buf) {
+    const ch = buf.numberOfChannels, n = buf.length;
+    const pcm = new Float32Array(n * ch);
+    for (let c = 0; c < ch; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < n; i++) pcm[i * ch + c] = d[i];
+    }
+    return wavBlob(pcm, ch, buf.sampleRate);
+  }
+  /** Fresh event seeds for another take of the same score. Thunder keeps
+   * its distance (seed % 4). */
+  function reseed(spec) {
+    const s = clone(spec);
+    for (const e of s.events) {
+      const keep = e.role === "thunder" ? 3 : 0;
+      let seed;
+      do { seed = (Math.floor(Math.random() * 256) & ~keep) | ((e.seed | 0) & keep); } while (seed === e.seed);
+      e.seed = seed;
+    }
+    return s;
+  }
+
   function initGenerator() {
     const form = $("#gen-form");
     const input = $("#gen-input");
@@ -738,7 +862,7 @@
       go.textContent = "Generating…";
       if (!viaHelper && !keepHelper) helper.hidden = true;
       if (player.token === "gen") stop();
-      say(engine.ready ? "" : "Starting the in-browser engine (Python + numpy, once per visit)…");
+      say(engine.ready || engine.mode === "server" ? "" : "Starting the in-browser engine (Python + numpy, once per visit)…");
       try {
         const planned = await engine.plan(caption, (loaded, total) => {
           prog.hidden = false;
@@ -779,7 +903,11 @@
       specSum.textContent = `${num(spec.duration)} s · ${spec.texture === "none" ? "no bed" : words(spec.texture)} · ${spec.mood} · ${spec.events.length} event${spec.events.length === 1 ? "" : "s"}`;
       capEl.textContent = caption;
       specEl.innerHTML = highlight(prettySpec(spec));
-      requestAnimationFrame(() => redraw());
+      requestAnimationFrame(() => {
+        redraw();
+        const r = out.getBoundingClientRect();
+        if (r.bottom > window.innerHeight || r.top < 0) out.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
     }
 
     form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
@@ -795,14 +923,30 @@
     $("#gen-dl").addEventListener("click", () => {
       if (!result) return;
       const { res, caption } = result;
-      const url = URL.createObjectURL(wavBlob(res.pcm, res.channels, res.sampleRate));
-      const a = el("a");
-      a.href = url;
-      a.download = `orb-${caption.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "sound"}.wav`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      saveBlob(wavBlob(res.pcm, res.channels, res.sampleRate), `orb-${slug(caption)}${result.take ? `-take${result.take + 1}` : ""}.wav`);
+    });
+    const againBtn = $("#gen-again");
+    againBtn.addEventListener("click", async () => {
+      if (!result || busy) return;
+      busy = true;
+      againBtn.disabled = go.disabled = true;
+      againBtn.textContent = "Rendering…";
+      if (player.token === "gen") stop();
+      try {
+        const spec = reseed(result.planned.spec);
+        const res = await engine.render(spec, 0);
+        result = { ...result, planned: { ...result.planned, spec }, res, take: (result.take || 0) + 1,
+          buffer: pcmToBuffer(res.pcm, res.channels, res.sampleRate) };
+        show();
+        playResult();
+      } catch (err) {
+        console.warn(err);
+        say(`That did not work: ${err.message}`, true);
+      } finally {
+        busy = false;
+        againBtn.disabled = go.disabled = false;
+        againBtn.textContent = "New take";
+      }
     });
     $("#gen-remix").addEventListener("click", () => {
       if (result && loadIntoPlayground) loadIntoPlayground(result.planned.spec, { peaks: result.res.peaks, buffer: result.buffer });
@@ -818,7 +962,9 @@
     const root = $("#gallery");
     const tabsEl = $("#lib-tabs");
     const playAll = $("#lib-playall");
-    const lib = DATA.cues.filter((c) => c.group && c.group !== "Building blocks");
+    const order = DATA.groups || [];
+    const lib = DATA.cues.filter((c) => c.group && c.group !== "Building blocks")
+      .map((c, i) => [c, i]).sort((a, b) => (order.indexOf(a[0].group) - order.indexOf(b[0].group)) || a[1] - b[1]).map((x) => x[0]);
     const blocks = DATA.cues.filter((c) => c.group === "Building blocks");
     const groups = (DATA.groups || []).filter((g) => lib.some((c) => c.group === g));
     let current = "All";
@@ -849,7 +995,10 @@
         ${small ? "" : `
         <div class="cue-foot">
           <span class="cue-len">${Number(cue.duration).toFixed(1)} s · ${evN} event${evN === 1 ? "" : "s"}${cue.spec && cue.spec.texture !== "none" ? ` · ${esc(words(cue.spec.texture))}` : ""}</span>
-          <button class="cue-spec-btn" type="button" aria-expanded="false">Spec</button>
+          <span class="cue-tools">
+            <a class="cue-dl" href="${esc(cue.audio)}" download="orb-${esc(cue.name)}.mp3" aria-label="Download ${esc(cue.title)} as MP3"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7.25 1.5h1.5v7.19l2.47-2.47 1.06 1.06L8 11.56 3.72 7.28l1.06-1.06 2.47 2.47V1.5zM2.5 12.5h11V14h-11z"/></svg>MP3</a>
+            <button class="cue-spec-btn" type="button" aria-expanded="false">Spec</button>
+          </span>
         </div>
         <div class="cue-spec" hidden>
           <p class="cue-caption">${esc(cue.caption || "")}</p>
@@ -1130,6 +1279,7 @@
     const card = $("#pg-card");
     const blurb = $("#pg-blurb");
     const resetBtn = $("#pg-reset");
+    const dlBtn = $("#pg-dl");
     const viz = $("#pg-viz");
     const canvas = $("#try-canvas");
     const marksEl = $("#pg-marks");
@@ -1606,6 +1756,17 @@
       }
     }
 
+    dlBtn.addEventListener("click", async () => {
+      const s = st;
+      try {
+        const buf = s.current.buffer || (s.current.buffer = await loadBuffer(s.current.url));
+        const edited = keyOf(s) !== JSON.stringify(s.preset.spec);
+        saveBlob(bufferWav(buf), `orb-${slug(s.preset.title || "score")}${edited ? "-edit" : ""}.wav`);
+      } catch (err) {
+        console.warn(err);
+      }
+    });
+
     /* -- preset selection, reset, JSON ------------------------------- */
     function select(i) {
       if (player.token === "try") stop();
@@ -1779,6 +1940,7 @@
   /* ------------------------------------------------------------------ */
 
   async function boot() {
+    engine.probe();
     initNav();
     observeReveal();
     try {

@@ -40,6 +40,24 @@ PEAK_BUCKETS = 360
 MAX_CAPTION_CHARS = 400
 
 
+_ORB_WEB = None
+
+
+def _orb_web():
+    """The site's renderer module (site/py/orb_web.py), loaded once."""
+    global _ORB_WEB
+    if _ORB_WEB is None:
+        import importlib.util
+
+        path = ROOT / "site" / "py" / "orb_web.py"
+        spec = importlib.util.spec_from_file_location("orb_web", path)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+        _ORB_WEB = mod
+    return _ORB_WEB
+
+
 def resolve_model_path(path: str) -> Path:
     """Accept either the .pt checkpoint or a .safetensors sibling."""
     candidate = ROOT / path
@@ -166,6 +184,43 @@ class Engine:
             grammar=SpecGrammar(),
         )
         return tok.decode_spec(out[0, len(prompt) :].tolist())
+
+    def plan_spec(self, caption: str) -> dict:
+        """Caption -> Spec dict, the same routing as ``generate`` (a ``no bed``
+        grammar caption is read exactly). Used by the site's fast server path."""
+        cap = normalize_caption(caption)
+        started = time.perf_counter()
+        try:
+            parsed = parse_caption(cap)
+        except ValueError:
+            parsed = None
+        with self._lock:
+            if parsed is not None and parsed.texture == NO_BED:
+                return {"spec": spec_to_dict(parsed), "planned": False, "ms": 0.0, "tokens": 0}
+            tok, planner = self._ensure_planner()
+            prompt = tok.prompt(cap)
+            out = planner.generate(
+                torch.tensor([prompt], device=self.device),
+                max_new_tokens=1024,
+                temperature=1e-6,
+                top_p=1.0,
+                eos_id=tok.eos_id,
+                grammar=SpecGrammar(),
+            )
+            ids = out[0, len(prompt) :].tolist()
+            spec = tok.decode_spec(ids)
+        ms = (time.perf_counter() - started) * 1000.0
+        return {"spec": spec_to_dict(spec), "planned": True, "ms": round(ms, 1), "tokens": len(ids)}
+
+    def render_spec(self, spec: dict, seed: int = 0) -> dict:
+        """Spec dict -> the exact output of the in-browser renderer
+        (``site/py/orb_web.render``): same loudness cap, peaks and audit."""
+        orb_web = _orb_web()
+        try:
+            with self._lock:
+                return orb_web.render(spec, seed=int(seed) & 0xFFFFFFFF)
+        except (ValueError, KeyError, TypeError) as err:
+            raise BadInput(f"invalid spec: {err}") from None
 
     @staticmethod
     def cache_id(caption: str, detail: bool, strength: float) -> str:

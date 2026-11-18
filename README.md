@@ -121,10 +121,11 @@ From the shell:
 orb-generate "8.00-second tense cue, drone bed, with riser @1.00 2.40s -16dB C #51" --out riser.wav
 ```
 
-Local web demo (pre-rendered examples plus live generation):
+The project page with a local, server-side engine (the same page as the
+[Hugging Face Space](https://huggingface.co/spaces/marcosmaceo/orb): generate, download,
+shape scores by hand):
 
 ```bash
-python scripts/build_web_examples.py   # pre-render the examples, once (~2 min)
 python web/server.py --port 8765       # http://127.0.0.1:8765
 ```
 

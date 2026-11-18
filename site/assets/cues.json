@@ -8,9 +8,10 @@
   "Video editing",
   "Brand",
   "Games",
-  "Scenes",
-  "Nature & foley",
-  "Everyday",
+  "Nature & weather",
+  "Places & scenes",
+  "Action",
+  "Everyday objects",
   "Building blocks"
  ],
  "prompts": [
@@ -15474,7 +15475,7 @@
     ]
    ],
    "title": "Sci-fi airlock",
-   "group": "Scenes",
+   "group": "Places & scenes",
    "use": "Game levels, sci-fi shorts, VR."
   },
   {
@@ -16498,14 +16499,11 @@
     ]
    ],
    "title": "Horror jump scare",
-   "group": "Scenes",
+   "group": "Places & scenes",
    "use": "Horror games, creepy reels."
   },
   {
    "name": "storm",
-   "title": "Rain + distant thunder",
-   "group": "Scenes",
-   "use": "Ambience for focus videos, scene background.",
    "caption": "8.00-second calm cue, rain bed, with thunder @0.60 6.00s -10dB L1 #0f, thunder @4.40 3.60s -16dB R2 #0e",
    "spec": {
     "duration": 8.0,
@@ -17507,7 +17505,10 @@
      -0.001,
      0.001
     ]
-   ]
+   ],
+   "title": "Rain + distant thunder",
+   "group": "Nature & weather",
+   "use": "Ambience for focus videos, scene background."
   },
   {
    "name": "thunderstorm",
@@ -18514,7 +18515,7 @@
     ]
    ],
    "title": "Thunderstorm",
-   "group": "Nature & foley",
+   "group": "Nature & weather",
    "use": "Storm scenes, weather in games, film ambience."
   },
   {
@@ -19530,7 +19531,7 @@
     ]
    ],
    "title": "Footsteps, door, knock",
-   "group": "Nature & foley",
+   "group": "Places & scenes",
    "use": "Someone arrives: thrillers, games, radio drama."
   },
   {
@@ -20554,7 +20555,7 @@
     ]
    ],
    "title": "Cave drips",
-   "group": "Nature & foley",
+   "group": "Nature & weather",
    "use": "Dungeons, caves, quiet tension."
   },
   {
@@ -21562,7 +21563,7 @@
     ]
    ],
    "title": "Explosion",
-   "group": "Nature & foley",
+   "group": "Action",
    "use": "Game blasts, action cuts, destruction."
   },
   {
@@ -22570,7 +22571,7 @@
     ]
    ],
    "title": "Beach",
-   "group": "Nature & foley",
+   "group": "Nature & weather",
    "use": "Travel videos, calm scenes, meditation apps."
   },
   {
@@ -23586,7 +23587,7 @@
     ]
    ],
    "title": "Forest morning",
-   "group": "Nature & foley",
+   "group": "Nature & weather",
    "use": "Nature documentaries, game overworlds, wake-up screens."
   },
   {
@@ -24594,7 +24595,7 @@
     ]
    ],
    "title": "Night by the pond",
-   "group": "Nature & foley",
+   "group": "Nature & weather",
    "use": "Night scenes, sleep sounds, quiet game levels."
   },
   {
@@ -25594,7 +25595,7 @@
     ]
    ],
    "title": "Stream",
-   "group": "Nature & foley",
+   "group": "Nature & weather",
    "use": "Relaxation, hiking footage, a garden."
   },
   {
@@ -26610,7 +26611,7 @@
     ]
    ],
    "title": "City street",
-   "group": "Nature & foley",
+   "group": "Places & scenes",
    "use": "Urban b-roll, establishing shots, open-world games."
   },
   {
@@ -27634,7 +27635,7 @@
     ]
    ],
    "title": "Sword fight",
-   "group": "Nature & foley",
+   "group": "Action",
    "use": "Fantasy games, fight scenes, trailers."
   },
   {
@@ -28658,7 +28659,7 @@
     ]
    ],
    "title": "Haunted house",
-   "group": "Nature & foley",
+   "group": "Places & scenes",
    "use": "Horror games, Halloween, creepy reveals."
   },
   {
@@ -29674,7 +29675,7 @@
     ]
    ],
    "title": "Kitchen",
-   "group": "Everyday",
+   "group": "Places & scenes",
    "use": "Cooking videos, home scenes, ads."
   },
   {
@@ -30690,7 +30691,7 @@
     ]
    ],
    "title": "Office",
-   "group": "Everyday",
+   "group": "Places & scenes",
    "use": "Work-from-home b-roll, productivity apps."
   },
   {
@@ -31690,7 +31691,7 @@
     ]
    ],
    "title": "Glass breaking",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Accidents, break-ins, dramatic beats."
   },
   {
@@ -32690,7 +32691,7 @@
     ]
    ],
    "title": "Alarm clock",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Morning routines, wake-up moments."
   },
   {
@@ -33690,7 +33691,7 @@
     ]
    ],
    "title": "Phone ringing",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Incoming calls, plot twists."
   },
   {
@@ -34690,7 +34691,7 @@
     ]
    ],
    "title": "Camera shutter",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Screenshot, photo apps, paparazzi."
   },
   {
@@ -35690,7 +35691,7 @@
     ]
    ],
    "title": "Applause",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Wins, finales, end of a talk."
   },
   {
@@ -36690,7 +36691,7 @@
     ]
    ],
    "title": "Champagne pop",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Celebrations, launches, milestones."
   },
   {
@@ -37690,7 +37691,7 @@
     ]
    ],
    "title": "Coins in a dish",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Payments, tips, rewards."
   },
   {
@@ -38690,7 +38691,7 @@
     ]
    ],
    "title": "Heartbeat",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Suspense, health apps, horror."
   },
   {
@@ -39690,7 +39691,7 @@
     ]
    ],
    "title": "Church bell",
-   "group": "Everyday",
+   "group": "Everyday objects",
    "use": "Towns, weddings, the hour striking."
   },
   {
@@ -40698,7 +40699,7 @@
     ]
    ],
    "title": "Fireworks",
-   "group": "Everyday",
+   "group": "Action",
    "use": "New Year, celebrations, game wins."
   },
   {
@@ -41698,7 +41699,7 @@
     ]
    ],
    "title": "Gunshot",
-   "group": "Everyday",
+   "group": "Action",
    "use": "Action games, westerns, starting pistol."
   },
   {
@@ -47946,46 +47947,6 @@
   },
   {
    "name": "pg_storm",
-   "title": "Storm",
-   "blurb": "Rain and a far rumble, then a close strike cracks on the left and rolls away.",
-   "tag": "scene",
-   "controls": [
-    {
-     "kind": "pan",
-     "events": [
-      1
-     ],
-     "label": "strike"
-    },
-    {
-     "kind": "bed_db",
-     "label": "rain",
-     "min": -44,
-     "max": -16
-    },
-    {
-     "kind": "seed",
-     "events": [
-      0,
-      1
-     ],
-     "label": "new thunder"
-    }
-   ],
-   "marks": [
-    {
-     "events": [
-      0
-     ],
-     "label": "far roll"
-    },
-    {
-     "events": [
-      1
-     ],
-     "label": "close strike"
-    }
-   ],
    "caption": "10.00-second dark cue, rain bed, with thunder @0.30 4.50s -16dB R2 #33, thunder @3.60 6.40s -4dB L2 #30",
    "spec": {
     "duration": 10.0,
@@ -48988,6 +48949,46 @@
      -0.005,
      0.004
     ]
+   ],
+   "title": "Storm",
+   "blurb": "Rain and a far rumble, then a close strike cracks on the left and rolls away.",
+   "tag": "scene",
+   "controls": [
+    {
+     "kind": "pan",
+     "events": [
+      1
+     ],
+     "label": "strike"
+    },
+    {
+     "kind": "bed_db",
+     "label": "rain",
+     "min": -44,
+     "max": -16
+    },
+    {
+     "kind": "seed",
+     "events": [
+      0,
+      1
+     ],
+     "label": "new thunder"
+    }
+   ],
+   "marks": [
+    {
+     "events": [
+      0
+     ],
+     "label": "far roll"
+    },
+    {
+     "events": [
+      1
+     ],
+     "label": "close strike"
+    }
    ]
   },
   {

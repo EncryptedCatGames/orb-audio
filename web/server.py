@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
-"""Local web server for the ORB audio demo.
+"""Web server for ORB: the showcase page (site/) plus a generation API.
+
+Serves the same page as GitHub Pages. When the page finds /api/health it
+plans and renders on this server (fast, torch planner) instead of booting
+Pyodide in the browser.
 
 Standard library only: ThreadingHTTPServer + BaseHTTPRequestHandler.
 Run:  .venv-torch/bin/python web/server.py [--port 8765]
+
+API
+  GET  /api/health                 -> {"ok": true, ...}
+  POST /api/plan    {caption}      -> {"spec", "planned", "ms", "tokens"}
+  POST /api/render  {spec, seed}   -> binary: u32 meta length, meta JSON,
+                                      pad to 4 bytes, int16 interleaved PCM
+  POST /api/generate {caption}     -> caption to a cached WAV (/audio/<id>.wav)
 """
 
 from __future__ import annotations
@@ -10,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import struct
 import sys
 import time
 import traceback
@@ -23,9 +35,8 @@ if str(ROOT) not in sys.path:
 
 from web.engine import BadInput, Engine  # noqa: E402
 
-STATIC_DIR = ROOT / "web" / "static"
+SITE_DIR = ROOT / "site"
 OUT_DIR = ROOT / "web" / "out"
-EXAMPLES_PATH = ROOT / "web" / "examples.json"
 MAX_BODY_BYTES = 1_000_000
 
 MIME_TYPES = {
@@ -36,10 +47,21 @@ MIME_TYPES = {
     ".svg": "image/svg+xml",
     ".ico": "image/x-icon",
     ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".zip": "application/zip",
+    ".bin": "application/octet-stream",
+    ".py": "text/plain; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
 }
 
 AUDIO_NAME = re.compile(r"^[A-Za-z0-9_-]+\.wav$")
-STATIC_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+SITE_PATH = re.compile(r"^(?:[A-Za-z0-9][A-Za-z0-9._-]*/)*[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+POST_ROUTES = {"/api/generate", "/api/plan", "/api/render"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -108,28 +130,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route_get(self, head: bool) -> None:
         path = unquote(urlparse(self.path).path)
-        if path == "/":
-            self._serve_file(STATIC_DIR / "index.html", head=head)
-            return
-        if path.startswith("/static/"):
-            name = path[len("/static/") :]
-            if not STATIC_NAME.fullmatch(name):
-                self._not_found(head)
-                return
-            self._serve_file(STATIC_DIR / name, head=head)
+        if path == "/" or path == "/index.html":
+            self._serve_range(SITE_DIR / "index.html", SITE_DIR, head=head)
             return
         if path.startswith("/audio/"):
             name = path[len("/audio/") :]
             if not AUDIO_NAME.fullmatch(name):
                 self._not_found(head)
                 return
-            self._serve_audio(name, head=head)
+            self._serve_range(OUT_DIR / name, OUT_DIR, head=head)
             return
         if path == "/api/health":
             assert self.engine is not None
             self._json(
                 {
                     "ok": True,
+                    "mode": "server",
                     "planner": self.engine.planner_path,
                     "detail": self.engine.detail_path,
                     "detail_available": self.engine.detail_available,
@@ -138,20 +154,37 @@ class Handler(BaseHTTPRequestHandler):
                 head=head,
             )
             return
-        if path == "/api/examples":
-            self._json(self._examples(), head=head)
+        if path.startswith("/api/"):
+            self._json({"error": "use POST" if path in POST_ROUTES else "not found"}, 405 if path in POST_ROUTES else 404, head=head)
             return
-        if path == "/api/generate":
-            self._json({"error": "use POST"}, 405, head=head)
+        rel = path.lstrip("/")
+        if SITE_PATH.fullmatch(rel) and not rel.startswith("."):
+            self._serve_range(SITE_DIR / rel, SITE_DIR, head=head)
             return
         self._not_found(head)
 
     def _route_post(self) -> None:
         path = unquote(urlparse(self.path).path)
-        if path != "/api/generate":
+        if path not in POST_ROUTES:
             self._json({"error": "not found"}, 404)
             return
         body = self._read_json()
+        assert self.engine is not None
+        if path == "/api/plan":
+            caption = body.get("caption")
+            if not isinstance(caption, str):
+                raise BadInput("caption must be a string")
+            self._json(self.engine.plan_spec(caption), 200)
+            return
+        if path == "/api/render":
+            spec = body.get("spec")
+            seed = body.get("seed", 0)
+            if not isinstance(spec, dict):
+                raise BadInput("spec must be an object")
+            if isinstance(seed, bool) or not isinstance(seed, int):
+                raise BadInput("seed must be an integer")
+            self._send_render(self.engine.render_spec(spec, seed))
+            return
         caption = body.get("caption")
         detail = body.get("detail", False)
         strength = body.get("strength", 1.0)
@@ -188,7 +221,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Content-Type-Options", "nosniff")
         if extra:
             for key, value in extra.items():
@@ -201,34 +234,28 @@ class Handler(BaseHTTPRequestHandler):
         body = b"not found\n"
         self._send(404, body, "text/plain; charset=utf-8", head=head)
 
-    def _serve_file(self, path: Path, head: bool = False) -> None:
-        try:
-            resolved = path.resolve()
-            resolved.relative_to(STATIC_DIR.resolve())
-        except (OSError, ValueError):
-            self._not_found(head)
-            return
-        if not resolved.is_file():
-            self._not_found(head)
-            return
-        try:
-            body = resolved.read_bytes()
-        except OSError:
-            self._not_found(head)
-            return
-        ctype = MIME_TYPES.get(resolved.suffix.lower(), "application/octet-stream")
-        self._send(200, body, ctype, head=head)
+    def _send_render(self, out: dict) -> None:
+        import numpy as np
 
-    def _serve_audio(self, name: str, head: bool = False) -> None:
-        path = (OUT_DIR / name).resolve()
+        pcm = np.clip(np.asarray(out.pop("pcm"), dtype=np.float32), -1.0, 1.0)
+        pcm16 = (pcm * 32767.0).round().astype("<i2").tobytes()
+        meta = json.dumps(out).encode("utf-8")
+        pad = (-(4 + len(meta))) % 4
+        body = struct.pack("<I", len(meta)) + meta + b" " * pad + pcm16
+        self._send(200, body, "application/octet-stream")
+
+    def _serve_range(self, path: Path, root: Path, head: bool = False) -> None:
+        """Serve one file under ``root``, with HTTP Range support for media."""
         try:
-            path.relative_to(OUT_DIR.resolve())
-        except ValueError:
+            path = path.resolve()
+            path.relative_to(root.resolve())
+        except (OSError, ValueError):
             self._not_found(head)
             return
         if not path.is_file():
             self._not_found(head)
             return
+        ctype = MIME_TYPES.get(path.suffix.lower(), "application/octet-stream")
 
         size = path.stat().st_size
         byte_range = self._parse_range(size)
@@ -236,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(
                 416,
                 b"",
-                "audio/wav",
+                ctype,
                 head=head,
                 extra={"Content-Range": f"bytes */{size}", "Accept-Ranges": "bytes"},
             )
@@ -265,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
             self._not_found(head)
             return
 
-        self._send(status, body, "audio/wav", head=head, extra=extra)
+        self._send(status, body, ctype, head=head, extra=extra)
 
     def _parse_range(self, size: int) -> tuple[int, int] | None | str:
         header = self.headers.get("Range")
@@ -313,17 +340,6 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             raise BadInput("JSON body must be an object")
         return body
-
-    @staticmethod
-    def _examples() -> dict:
-        try:
-            raw = EXAMPLES_PATH.read_text(encoding="utf-8")
-            data = json.loads(raw)
-            if isinstance(data, dict) and isinstance(data.get("examples"), list):
-                return data
-        except (OSError, json.JSONDecodeError):
-            pass
-        return {"examples": []}
 
 
 def main() -> None:

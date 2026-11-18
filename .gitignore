@@ -14,7 +14,6 @@ __pycache__/
 /orb_out/
 /runs/
 /web/out/
-/web/examples.json
 /eval/runs/
 
 # Data and training artifacts (large, reproducible from scripts)
