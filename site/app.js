@@ -34,6 +34,123 @@
 
   let DATA = null; // cues.json
 
+  /* ------------------------------------------------------------------ */
+  /* Language: English is in the page, Spanish comes from i18n.js         */
+  /* ------------------------------------------------------------------ */
+
+  const I18N = window.ORB_I18N || { html: {}, attr: {}, ui: {}, text: {}, examples: [], words: [] };
+  const UI_EN = {
+    "play": "Play", "stop": "Stop",
+    "gen.go": "Generate", "gen.going": "Generating…",
+    "gen.empty": "Type a few words about the sound, or tap an example below.",
+    "gen.starting": "Starting the in-browser engine (Python + numpy, once per visit)…",
+    "gen.dlprog": "Downloading the planner · {a} of {b} MB",
+    "gen.dldone": "Planner downloaded · writing the score…",
+    "gen.rendering": "Rendering…", "gen.again": "New take",
+    "gen.fail": "That did not work: {m}",
+    "gen.planner": "Planner · {n} tokens in {s} s",
+    "gen.exact": "Read exactly from the caption, planner skipped",
+    "gen.tail": "rendered in {ms} ms · audit {a}",
+    "gen.passed": "passed", "gen.flagged": "flagged",
+    "gen.translated": "Read in English as: “{c}”",
+    "nobed": "no bed", "events": "{n} events", "event": "1 event", "take": "take {n}",
+    "hist.play": "Play {c}", "hist.dl": "Download {c} as WAV",
+    "all": "All", "playall": "Play all", "playall.all": "Play all cues", "playall.g": "Play all {g} cues",
+    "spec": "Spec", "hide": "Hide", "copy": "Copy JSON", "copied": "Copied", "copy.fail": "Select the JSON above",
+    "mp3.aria": "Download {t} as MP3",
+    "edit": "Edit", "done": "Done", "pan": "pan", "level": "level",
+    "gain.aria": "{l} gain", "mark.aria": "{l} time", "mark.at": "{l} at {t} seconds", "viz.aria": "{t}, {d} seconds",
+    "json.ok": "Valid JSON in, a new render out.", "json.done": "Rendered. Drag a marker, or edit again.",
+    "json.bad": "Not valid JSON: {m}", "json.refused": "The engine refused this Spec: {m}",
+    "gen.blurb": "Your generated sound. Drag a marker or a slider; Reset brings the preset back.",
+    "st.idle": "engine idle", "st.ready": "engine ready", "st.server": "server engine ready",
+    "st.rendering": "rendering", "st.planning": "planning", "st.starting": "starting engine",
+    "st.unavailable": "engine unavailable", "st.renderfail": "render failed, try another value",
+    "err.engine": "The in-browser engine could not start.",
+    "err.noplanner": "This build of the page ships no planner weights.",
+    "where.server": "All on this server.",
+    "fine.server": "Runs on this server. Every sound downloads as a 48 kHz stereo WAV.",
+  };
+  const LANGS = ["en", "es"];
+  let LANG = "en";
+  const EN_HTML = {};
+  const EN_ATTR = new Map();
+  const langHooks = [];
+  const fill = (s, v) => (v ? String(s).replace(/\{(\w+)\}/g, (m, n) => (v[n] != null ? v[n] : m)) : s);
+  const t = (k, v) => fill((LANG === "es" && (I18N.ui[k] || I18N.html[k])) || UI_EN[k] || k, v);
+  const tr = (s) => (LANG === "es" && s != null && I18N.text[s]) || s;
+  const onLang = (fn) => langHooks.push(fn);
+
+  function applyStatic() {
+    for (const n of $$("[data-i18n]")) {
+      const k = n.dataset.i18n;
+      const es = I18N.html[k] || I18N.ui[k];
+      const html = LANG === "es" && es ? es : EN_HTML[k] != null ? EN_HTML[k] : UI_EN[k];
+      if (html != null && n.innerHTML !== html) n.innerHTML = html;
+    }
+    for (const n of $$("*")) {
+      for (const a of n.getAttributeNames()) {
+        if (!a.startsWith("data-i18n-")) continue;
+        const target = a.slice(10);
+        const k = n.getAttribute(a);
+        const en = EN_ATTR.get(`${target}|${k}`);
+        const val = LANG === "es" && I18N.attr[k] ? I18N.attr[k] : en;
+        if (val == null) continue;
+        if (target === "text") n.textContent = val;
+        else n.setAttribute(target, val);
+      }
+    }
+    for (const n of $$("[data-tr]")) n.textContent = tr(n.dataset.tr);
+    for (const b of $$("button[data-label]")) {
+      b.setAttribute("aria-label", `${t(b.classList.contains("playing") ? "stop" : "play")} ${tr(b.dataset.label)}`);
+    }
+  }
+  function captureStatic() {
+    for (const n of $$("[data-i18n]")) if (EN_HTML[n.dataset.i18n] == null) EN_HTML[n.dataset.i18n] = n.innerHTML;
+    for (const n of $$("*")) {
+      for (const a of n.getAttributeNames()) {
+        if (!a.startsWith("data-i18n-")) continue;
+        const target = a.slice(10);
+        const k = n.getAttribute(a);
+        EN_ATTR.set(`${target}|${k}`, target === "text" ? n.textContent : n.getAttribute(target));
+      }
+    }
+  }
+  function setLang(l, save) {
+    LANG = LANGS.includes(l) ? l : "en";
+    document.documentElement.lang = LANG;
+    if (save) { try { localStorage.setItem("orb-lang", LANG); } catch (_) { /* private mode */ } }
+    for (const b of $$("#lang [data-lang]")) b.setAttribute("aria-pressed", String(b.dataset.lang === LANG));
+    applyStatic();
+    langHooks.forEach((fn) => { try { fn(); } catch (err) { console.warn(err); } });
+  }
+  function initLang() {
+    captureStatic();
+    let l = null;
+    try { l = localStorage.getItem("orb-lang"); } catch (_) { /* private mode */ }
+    const q = new URLSearchParams(location.search).get("lang");
+    if (q) l = q;
+    if (!LANGS.includes(l)) l = (navigator.languages || [navigator.language || "en"]).some((x) => /^es\b/i.test(x)) ? "es" : "en";
+    for (const b of $$("#lang [data-lang]")) b.addEventListener("click", () => setLang(b.dataset.lang, true));
+    setLang(l, false);
+  }
+
+  /* Spanish sound words -> the English the planner reads. */
+  const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const ES_RULES = (I18N.words || []).slice().sort((a, b) => b[0].length - a[0].length)
+    .map(([es, en]) => [new RegExp(`(^|[^a-z0-9])${es.replace(/ /g, "\\s+")}(?=$|[^a-z0-9])`, "g"), en]);
+  const ES_HINT = /\b(lluvia|trueno|truenos|tormenta|puerta|portazo|pasos|pajaros?|grillos|olas|playa|bosque|noche|luego|despues|cristal|vidrio|telefono|aplausos|latido|campana|disparos?|espadas?|monedas?|nivel|cocina|oficina|sonando|viento|agua|fuego|ciudad|calle|coche|y|con|una?|el|los|las|del)\b/;
+  function toEnglish(text) {
+    if (CAPTION_RE.test(text)) return null;
+    const f = fold(text);
+    // Spanish UI, accents, or a Spanish word: translate. Plain English passes untouched.
+    if (!(LANG === "es" || /[ñ¿¡]/.test(text) || /[áéíóú]/.test(text) || ES_HINT.test(f))) return null;
+    let s = ` ${f} `;
+    for (const [re, en] of ES_RULES) s = s.replace(re, (m, pre) => `${pre}${en}`);
+    s = s.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
+    return s && s !== f.trim() ? s : null;
+  }
+
   /* Theme colours come from CSS custom properties, so canvases follow dark mode. */
   let THEME = null;
   function theme() {
@@ -205,7 +322,7 @@
     if (!btn) return;
     btn.classList.toggle("playing", playing);
     btn.setAttribute("aria-pressed", String(playing));
-    if (btn.dataset.label) btn.setAttribute("aria-label", `${playing ? "Stop" : "Play"} ${btn.dataset.label}`);
+    if (btn.dataset.label) btn.setAttribute("aria-label", `${t(playing ? "stop" : "play")} ${tr(btn.dataset.label)}`);
   }
 
   /* ------------------------------------------------------------------ */
@@ -237,8 +354,9 @@
           if (this.mode === "server") {
             this.ready = true;
             this.status("ready", "server engine ready");
-            document.querySelectorAll("[data-where]").forEach((n) => { n.textContent = "Both run on this server, so there is nothing to download first."; });
-            document.querySelectorAll("[data-fine]").forEach((n) => { n.textContent = "Generation runs on this server. Every result downloads as a 48 kHz stereo WAV, and the same page runs fully in your browser at stdevmac.github.io/orb-audio."; });
+            document.querySelectorAll("[data-where]").forEach((n) => { n.dataset.i18n = "where.server"; });
+            document.querySelectorAll("[data-fine]").forEach((n) => { n.dataset.i18n = "fine.server"; });
+            applyStatic();
             document.dispatchEvent(new CustomEvent("orb:engine-ready"));
           } else if (this.wantInit) {
             this.init();
@@ -345,7 +463,7 @@
     },
     workerRender(spec, seed = 0) {
       this.init();
-      if (this.failed) return Promise.reject(new Error("The in-browser engine could not start."));
+      if (this.failed) return Promise.reject(new Error(t("err.engine")));
       const id = ++this.seq;
       if (this.ready) this.status("busy", "rendering");
       return new Promise((resolve, reject) => {
@@ -363,8 +481,8 @@
     },
     workerPlan(caption, onProgress) {
       this.init();
-      if (this.failed) return Promise.reject(new Error("The in-browser engine could not start."));
-      if (!DATA.planner) return Promise.reject(new Error("This build of the page ships no planner weights."));
+      if (this.failed) return Promise.reject(new Error(t("err.engine")));
+      if (!DATA.planner) return Promise.reject(new Error(t("err.noplanner")));
       const id = ++this.seq;
       if (this.ready) this.status("busy", "planning");
       return new Promise((resolve, reject) => {
@@ -380,12 +498,31 @@
       this.pending.clear();
     },
     status(kind, text) {
+      this.last = [kind, text];
       for (const pill of $$("[data-engine-status]")) {
         pill.className = `status ${kind}`;
-        pill.textContent = text;
+        pill.textContent = statusText(text);
       }
     },
   };
+  const STATUS_ES = [
+    [/^engine idle$/, "motor en espera"], [/^engine ready$/, "motor listo"], [/^server engine ready$/, "motor del servidor listo"],
+    [/^rendering$/, "renderizando"], [/^planning$/, "planificando"], [/^starting engine$/, "arrancando el motor"],
+    [/^engine unavailable$/, "motor no disponible"], [/^render failed, try another value$/, "falló el render, prueba otro valor"],
+    [/^caption read exactly$/, "descripción leída tal cual"], [/^rendered in (\d+) ms$/, "renderizado en $1 ms"],
+    [/^planned in (\d+) ms$/, "planificado en $1 ms"], [/^engine ready · ([\d.]+) s boot$/, "motor listo · arranque en $1 s"],
+    [/^planner (.+) MB$/, "planificador $1 MB"], [/^loading (.+)$/, "cargando $1"],
+  ];
+  function statusText(text) {
+    if (LANG !== "es") return text;
+    for (const [re, es] of STATUS_ES) if (re.test(text)) return text.replace(re, es);
+    return text;
+  }
+  onLang(() => {
+    if (engine.last) engine.status(...engine.last);
+    else for (const p of $$("[data-engine-status]")) p.textContent = statusText("engine idle");
+  });
+
   function lastLine(s) {
     const lines = String(s).trim().split("\n").filter(Boolean);
     return lines[lines.length - 1] || String(s);
@@ -620,9 +757,6 @@
     [/\b(?:neutral|plain|simple|minimal)\b/, "neutral"],
     [/\b(?:intense|epic|action|aggressive|huge|massive|powerful|heavy|big|loud)\b/, "intense"],
   ];
-  const WORD_EXAMPLES = ["door slam in the rain", "spaceship airlock opens, tense", "coin pickup, then level up", "thunderstorm", "footsteps, door slam, then a knock",
-    "birds singing in the forest at dawn", "waves on the beach", "crickets and an owl at night", "glass breaking in the kitchen", "phone ringing in the office",
-    "sword fight", "car horn in traffic", "applause", "fireworks", "heartbeat, tense", "pouring a glass of water"];
 
   function hashText(s) {
     let h = 2166136261;
@@ -744,7 +878,7 @@
   }
 
   function slug(text, fallback = "sound") {
-    let s = String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    let s = fold(String(text)).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     if (s.length > 48) s = s.slice(0, 48).replace(/-[^-]*$/, "");
     return s || fallback;
   }
@@ -781,6 +915,11 @@
     return s;
   }
 
+  const HERO_EXAMPLES = ["door slam in the rain", "thunderstorm", "coin pickup, then level up",
+    "birds singing in the forest at dawn", "footsteps, door slam, then a knock", "glass breaking in the kitchen"];
+  const HISTORY_MAX = 24;
+  const DL_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7.25 1.5h1.5v7.19l2.47-2.47 1.06 1.06L8 11.56 3.72 7.28l1.06-1.06 2.47 2.47V1.5zM2.5 12.5h11V14h-11z"/></svg>';
+
   function initGenerator() {
     const form = $("#gen-form");
     const input = $("#gen-input");
@@ -791,7 +930,7 @@
     const runBtn = $("#gen-run");
     const msg = $("#gen-msg");
     const prog = $("#gen-progress");
-    const fill = $("#gen-progress-fill");
+    const fillBar = $("#gen-progress-fill");
     const progText = $("#gen-progress-text");
     const out = $("#gen-out");
     const playBtn = $("#gen-play");
@@ -800,34 +939,36 @@
     const capEl = $("#gen-cap");
     const specEl = $("#gen-spec");
     const specSum = $("#gen-spec-sum");
+    const againBtn = $("#gen-again");
+    const histBox = $("#gen-hist");
+    const histList = $("#gen-hist-list");
+    const histN = $("#gen-hist-n");
     let busy = false;
     let result = null;
+    let lastMsg = null;   // [key, vars, isErr] so a language switch can redraw it
+    const history = [];   // newest first
+    let seq = 0;
 
-    const say = (text, isErr = false) => {
-      msg.hidden = !text;
-      msg.textContent = text || "";
+    const say = (key, vars, isErr = false) => {
+      lastMsg = key ? [key, vars, isErr] : null;
+      msg.hidden = !key;
+      msg.textContent = key ? t(key, vars) : "";
       msg.classList.toggle("err", isErr);
     };
-    const chip = (root, label, title, onClick) => {
-      const c = el("button", "gen-chip", label);
-      c.type = "button";
-      if (title) c.title = title;
-      c.addEventListener("click", onClick);
-      root.appendChild(c);
-      return c;
-    };
-    for (const ex of DATA.prompts || []) {
-      chip($("#gen-chips"), ex.label, ex.caption, () => {
-        input.value = ex.caption;
-        run(ex.caption, false);
-      });
+
+    /* -- example chips: a few, in the page language ------------------- */
+    const chipsEl = $("#gen-words");
+    function buildChips() {
+      chipsEl.innerHTML = "";
+      const list = LANG === "es" && (I18N.examples || []).length ? I18N.examples : HERO_EXAMPLES;
+      for (const w of list.slice(0, 6)) {
+        const c = el("button", "gen-chip", w);
+        c.type = "button";
+        c.addEventListener("click", () => { input.value = w; submit(); });
+        chipsEl.appendChild(c);
+      }
     }
-    for (const w of WORD_EXAMPLES) {
-      chip($("#gen-words"), w, null, () => {
-        input.value = w;
-        submit();
-      });
-    }
+    buildChips();
 
     const redraw = (p = -1) => result && drawWave(wave, result.res, { progress: p });
     function playResult() {
@@ -835,11 +976,13 @@
       play(result.buffer, "gen", (p) => redraw(p), () => { setPlayIcon(playBtn, false); redraw(); });
       setPlayIcon(playBtn, true);
     }
+    const fileName = (r) => `orb-${slug(r.caption)}${r.take ? `-take${r.take + 1}` : ""}.wav`;
+    const download = (r) => saveBlob(wavBlob(r.res.pcm, r.res.channels, r.res.sampleRate), fileName(r));
 
     function submit() {
       const text = input.value.trim();
       if (!text) {
-        say("Type a few words about the sound, or tap an example below.");
+        say("gen.empty");
         input.focus();
         return;
       }
@@ -848,74 +991,147 @@
         run(text, false);
         return;
       }
+      // The planner reads English: Spanish sound words are mapped first, and
+      // the user's own words stay on the result.
+      const english = toEnglish(text);
+      const planText = (english || text).slice(0, 240);
       // v8 reads plain words itself: the planner gets the raw text first. The
-      // keyword helper's reading is offered next to the result as a second
-      // opinion (it is better at soft/loud and ignores words it has no sound for).
-      const t = translate(text);
-      if (t) {
-        capBox.value = t.caption;
-        notes.textContent = t.notes;
+      // keyword helper's reading is offered as a folded second opinion.
+      const h = translate(planText);
+      if (h) {
+        capBox.value = h.caption;
+        notes.textContent = h.notes;
       }
-      helper.hidden = !t;
-      run(text.slice(0, 240), false, true);
+      helper.hidden = !h;
+      helper.open = false;
+      run(planText, false, true, text.slice(0, 240), english);
     }
 
-    async function run(caption, viaHelper, keepHelper = false) {
+    async function run(caption, viaHelper, keepHelper = false, shown = null, english = null) {
       if (busy) return;
       caption = caption.trim();
       if (!caption) return;
       busy = true;
-      go.disabled = runBtn.disabled = true;
-      go.textContent = "Generating…";
+      go.disabled = runBtn.disabled = againBtn.disabled = true;
+      go.textContent = t("gen.going");
       if (!viaHelper && !keepHelper) helper.hidden = true;
       if (player.token === "gen") stop();
-      say(engine.ready || engine.mode === "server" ? "" : "Starting the in-browser engine (Python + numpy, once per visit)…");
+      if (engine.ready || engine.mode === "server") say(null); else say("gen.starting");
       try {
         const planned = await engine.plan(caption, (loaded, total) => {
           prog.hidden = false;
           const pct = total ? loaded / total : 0;
-          fill.style.width = `${(pct * 100).toFixed(1)}%`;
-          progText.textContent = `Downloading the planner · ${(loaded / 1e6).toFixed(1)} of ${(total / 1e6).toFixed(1)} MB`;
-          if (pct >= 1) {
-            progText.textContent = "Planner downloaded · writing the score…";
-          }
-          say("");
+          fillBar.style.width = `${(pct * 100).toFixed(1)}%`;
+          progText.textContent = pct >= 1 ? t("gen.dldone")
+            : t("gen.dlprog", { a: (loaded / 1e6).toFixed(1), b: (total / 1e6).toFixed(1) });
+          say(null);
         });
         prog.hidden = true;
-        say("Rendering…");
+        say("gen.rendering");
         const res = await engine.render(planned.spec, 0);
-        result = { caption, planned, res, buffer: pcmToBuffer(res.pcm, res.channels, res.sampleRate) };
+        result = { id: ++seq, caption: shown || caption, english, planned, res, take: 0,
+          buffer: pcmToBuffer(res.pcm, res.channels, res.sampleRate) };
+        remember(result);
         show();
-        say("");
+        say(null);
         playResult();
       } catch (err) {
         console.warn(err);
         prog.hidden = true;
-        say(`That did not work: ${err.message}`, true);
+        say("gen.fail", { m: err.message }, true);
       } finally {
         busy = false;
-        go.disabled = runBtn.disabled = false;
-        go.textContent = "Generate";
+        go.disabled = runBtn.disabled = againBtn.disabled = false;
+        go.textContent = t("gen.go");
       }
     }
 
-    function show() {
-      const { planned, res, caption } = result;
-      const spec = planned.spec;
+    function specSummary(spec) {
+      const n = spec.events.length;
+      const bed = spec.texture === "none" ? t("nobed") : tr(words(spec.texture));
+      return `${num(spec.duration)} s · ${bed} · ${tr(spec.mood)} · ${n === 1 ? t("event") : t("events", { n })}`;
+    }
+    function pathText(r) {
+      const p = r.planned;
+      const how = p.planned ? t("gen.planner", { n: p.tokens, s: (p.ms / 1000).toFixed(1) }) : t("gen.exact");
+      const tail = t("gen.tail", { ms: r.res.wallMs, a: t(r.res.passes ? "gen.passed" : "gen.flagged") });
+      return `${how} · ${tail}${r.english ? ` · ${t("gen.translated", { c: r.english })}` : ""}`;
+    }
+
+    function show(scroll = true) {
+      if (!result) return;
+      const spec = result.planned.spec;
       out.hidden = false;
-      const how = planned.planned
-        ? `Planner · ${planned.tokens} tokens in ${(planned.ms / 1000).toFixed(1)} s`
-        : "No bed: read exactly from the caption, planner skipped";
-      pathEl.textContent = `${how} · rendered in ${res.wallMs} ms · audit ${res.passes ? "passed" : "flagged"}`;
-      specSum.textContent = `${num(spec.duration)} s · ${spec.texture === "none" ? "no bed" : words(spec.texture)} · ${spec.mood} · ${spec.events.length} event${spec.events.length === 1 ? "" : "s"}`;
-      capEl.textContent = caption;
+      pathEl.textContent = pathText(result);
+      specSum.textContent = specSummary(spec);
+      capEl.textContent = result.english || result.caption;
       specEl.innerHTML = highlight(prettySpec(spec));
+      for (const li of histList.children) li.classList.toggle("on", Number(li.dataset.id) === result.id);
       requestAnimationFrame(() => {
         redraw();
+        if (!scroll) return;
         const r = out.getBoundingClientRect();
-        if (r.bottom > window.innerHeight || r.top < 0) out.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if (r.bottom > window.innerHeight || r.top < 0) out.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
       });
     }
+
+    /* -- "Your sounds": every take of this visit ---------------------- */
+    function remember(r) {
+      history.unshift(r);
+      if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
+      renderHistory();
+    }
+    function renderHistory() {
+      histBox.hidden = history.length < 2;
+      histN.textContent = history.length >= 2 ? `· ${history.length}` : "";
+      histList.innerHTML = "";
+      for (const r of history) {
+        const li = el("li", "gen-hist-item");
+        li.dataset.id = String(r.id);
+        if (result && r.id === result.id) li.classList.add("on");
+        const label = r.take ? `${r.caption} · ${t("take", { n: r.take + 1 })}` : r.caption;
+        const pb = el("button", "play play-sm");
+        pb.type = "button";
+        pb.setAttribute("aria-pressed", "false");
+        pb.setAttribute("aria-label", t("hist.play", { c: label }));
+        pb.innerHTML = `<svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="${PLAY_D}"/></svg>`;
+        const body = el("button", "gen-hist-body");
+        body.type = "button";
+        body.title = label;
+        const cv = el("canvas");
+        cv.setAttribute("aria-hidden", "true");
+        const txt = el("span", "gen-hist-text");
+        txt.append(el("span", "gen-hist-cap", r.caption),
+          el("span", "gen-hist-meta", `${num(r.planned.spec.duration)} s${r.take ? ` · ${t("take", { n: r.take + 1 })}` : ""}`));
+        body.append(cv, txt);
+        const dl = el("button", "gen-hist-dl");
+        dl.type = "button";
+        dl.setAttribute("aria-label", t("hist.dl", { c: label }));
+        dl.innerHTML = `${DL_SVG}<span>WAV</span>`;
+        li.append(pb, body, dl);
+        histList.appendChild(li);
+        const draw = (p = -1) => drawWave(cv, r.res, { progress: p, bars: 24 });
+        const token = `hist-${r.id}`;
+        pb.addEventListener("click", () => {
+          if (player.token === token) return stop();
+          play(r.buffer, token, (p) => draw(p), () => { setPlayIcon(pb, false); draw(); });
+          setPlayIcon(pb, true);
+        });
+        body.addEventListener("click", () => {
+          result = r;
+          show(false);
+          playResult();
+        });
+        dl.addEventListener("click", () => download(r));
+        requestAnimationFrame(() => draw());
+      }
+    }
+    $("#gen-hist-clear").addEventListener("click", () => {
+      if (player.token && String(player.token).startsWith("hist-")) stop();
+      history.length = 0;
+      if (result) history.push(result);
+      renderHistory();
+    });
 
     form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
     input.addEventListener("keydown", (e) => {
@@ -927,38 +1143,42 @@
     });
     playBtn.addEventListener("click", () => (player.token === "gen" ? stop() : playResult()));
     wave.addEventListener("click", () => (player.token === "gen" ? stop() : playResult()));
-    $("#gen-dl").addEventListener("click", () => {
-      if (!result) return;
-      const { res, caption } = result;
-      saveBlob(wavBlob(res.pcm, res.channels, res.sampleRate), `orb-${slug(caption)}${result.take ? `-take${result.take + 1}` : ""}.wav`);
-    });
-    const againBtn = $("#gen-again");
+    $("#gen-dl").addEventListener("click", () => { if (result) download(result); });
     againBtn.addEventListener("click", async () => {
       if (!result || busy) return;
       busy = true;
       againBtn.disabled = go.disabled = true;
-      againBtn.textContent = "Rendering…";
+      againBtn.textContent = t("gen.rendering");
       if (player.token === "gen") stop();
       try {
         const spec = reseed(result.planned.spec);
         const res = await engine.render(spec, 0);
-        result = { ...result, planned: { ...result.planned, spec }, res, take: (result.take || 0) + 1,
+        const takes = history.filter((h) => h.caption === result.caption).reduce((m, h) => Math.max(m, h.take), 0);
+        result = { ...result, id: ++seq, planned: { ...result.planned, spec }, res, take: takes + 1,
           buffer: pcmToBuffer(res.pcm, res.channels, res.sampleRate) };
+        remember(result);
         show();
         playResult();
       } catch (err) {
         console.warn(err);
-        say(`That did not work: ${err.message}`, true);
+        say("gen.fail", { m: err.message }, true);
       } finally {
         busy = false;
         againBtn.disabled = go.disabled = false;
-        againBtn.textContent = "New take";
+        againBtn.textContent = t("gen.again");
       }
     });
     $("#gen-remix").addEventListener("click", () => {
       if (result && loadIntoPlayground) loadIntoPlayground(result.planned.spec, { peaks: result.res.peaks, buffer: result.buffer });
     });
-    window.addEventListener("resize", debounce(() => redraw(), 120));
+    onLang(() => {
+      buildChips();
+      if (!busy) go.textContent = t("gen.go");
+      if (lastMsg) say(...lastMsg);
+      if (result) { pathEl.textContent = pathText(result); specSum.textContent = specSummary(result.planned.spec); }
+      renderHistory();
+    });
+    window.addEventListener("resize", debounce(() => { redraw(); if (history.length >= 2) renderHistory(); }, 120));
   }
 
   /* ------------------------------------------------------------------ */
@@ -981,36 +1201,40 @@
     function stopChain() {
       chain = 0;
       setPlayIcon(playAll, false);
-      $("span", playAll).textContent = "Play all";
+      $("span", playAll).textContent = t("playall");
     }
+    const lenText = (cue) => {
+      const evN = (cue.spec && cue.spec.events.length) || 0;
+      const tex = cue.spec && cue.spec.texture !== "none" ? ` · ${tr(words(cue.spec.texture))}` : "";
+      return `${Number(cue.duration).toFixed(1)} s · ${evN === 1 ? t("event") : t("events", { n: evN })}${tex}`;
+    };
 
     function makeCard(cue, small) {
       const card = el("article", small ? "cue block" : "cue");
-      const evN = (cue.spec && cue.spec.events.length) || 0;
       card.innerHTML = `
         <div class="cue-top">
           <div class="cue-head">
-            ${small ? "" : `<div class="cue-group">${esc(cue.group)}</div>`}
-            <h3 class="cue-title">${esc(cue.title)}</h3>
+            ${small ? "" : `<div class="cue-group" data-tr="${esc(cue.group)}">${esc(tr(cue.group))}</div>`}
+            <h3 class="cue-title" data-tr="${esc(cue.title)}">${esc(tr(cue.title))}</h3>
           </div>
-          <button class="play" type="button" data-label="${esc(cue.title)}" aria-label="Play ${esc(cue.title)}" aria-pressed="false">
+          <button class="play" type="button" data-label="${esc(cue.title)}" aria-label="${esc(t("play"))} ${esc(tr(cue.title))}" aria-pressed="false">
             <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="${PLAY_D}"/></svg>
           </button>
         </div>
-        <p class="cue-cap">${esc(cue.use || cue.blurb || "")}</p>
+        <p class="cue-cap" data-tr="${esc(cue.use || cue.blurb || "")}">${esc(tr(cue.use || cue.blurb || ""))}</p>
         <canvas aria-hidden="true"></canvas>
         ${small ? "" : `
         <div class="cue-foot">
-          <span class="cue-len">${Number(cue.duration).toFixed(1)} s · ${evN} event${evN === 1 ? "" : "s"}${cue.spec && cue.spec.texture !== "none" ? ` · ${esc(words(cue.spec.texture))}` : ""}</span>
+          <span class="cue-len">${esc(lenText(cue))}</span>
           <span class="cue-tools">
-            <a class="cue-dl" href="${esc(cue.audio)}" download="orb-${esc(cue.name)}.mp3" aria-label="Download ${esc(cue.title)} as MP3"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7.25 1.5h1.5v7.19l2.47-2.47 1.06 1.06L8 11.56 3.72 7.28l1.06-1.06 2.47 2.47V1.5zM2.5 12.5h11V14h-11z"/></svg>MP3</a>
-            <button class="cue-spec-btn" type="button" aria-expanded="false">Spec</button>
+            <a class="cue-dl" href="${esc(cue.audio)}" download="orb-${esc(cue.name)}.mp3" aria-label="${esc(t("mp3.aria", { t: tr(cue.title) }))}"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7.25 1.5h1.5v7.19l2.47-2.47 1.06 1.06L8 11.56 3.72 7.28l1.06-1.06 2.47 2.47V1.5zM2.5 12.5h11V14h-11z"/></svg>MP3</a>
+            <button class="cue-spec-btn" type="button" aria-expanded="false">${esc(t("spec"))}</button>
           </span>
         </div>
         <div class="cue-spec" hidden>
           <p class="cue-caption">${esc(cue.caption || "")}</p>
           <pre class="try-spec">${cue.spec ? highlight(prettySpec(cue.spec)) : ""}</pre>
-          <button class="cue-copy" type="button">Copy JSON</button>
+          <button class="cue-copy" type="button">${esc(t("copy"))}</button>
         </div>`}`;
       const canvas = $("canvas", card);
       const btn = $(".play", card);
@@ -1047,20 +1271,20 @@
           const open = box.hidden;
           box.hidden = !open;
           specBtn.setAttribute("aria-expanded", String(open));
-          specBtn.textContent = open ? "Hide" : "Spec";
+          specBtn.textContent = t(open ? "hide" : "spec");
         });
         $(".cue-copy", card).addEventListener("click", async (e) => {
           const b = e.currentTarget;
           try {
             await navigator.clipboard.writeText(prettySpec(cue.spec));
-            b.textContent = "Copied";
+            b.textContent = t("copied");
           } catch (_) {
-            b.textContent = "Select the JSON above";
+            b.textContent = t("copy.fail");
           }
-          setTimeout(() => { b.textContent = "Copy JSON"; }, 1600);
+          setTimeout(() => { b.textContent = t("copy"); }, 1600);
         });
       }
-      cards.set(cue.name, { card, start, redraw });
+      cards.set(cue.name, { card, start, redraw, cue });
       return card;
     }
 
@@ -1077,7 +1301,7 @@
       if (!list.length) return;
       chain = Date.now();
       setPlayIcon(playAll, true);
-      $("span", playAll).textContent = "Stop";
+      $("span", playAll).textContent = t("stop");
       cards.get(list[0].name).start(true);
     });
 
@@ -1086,7 +1310,9 @@
       const b = el("button", "lib-tab");
       b.type = "button";
       b.setAttribute("role", "tab");
-      b.innerHTML = `${esc(g)}<span>${n}</span>`;
+      b.dataset.g = g;
+      b.dataset.n = String(n);
+      b.innerHTML = `${esc(g === "All" ? t("all") : tr(g))}<span>${n}</span>`;
       b.addEventListener("click", () => select(g));
       b.addEventListener("keydown", (e) => {
         const all = ["All", ...groups];
@@ -1110,8 +1336,8 @@
         t.tabIndex = on ? 0 : -1;
       });
       for (const c of lib) cards.get(c.name).card.hidden = !(g === "All" || c.group === g);
-      $("span", playAll).textContent = "Play all";
-      playAll.setAttribute("aria-label", g === "All" ? "Play all cues" : `Play all ${g} cues`);
+      $("span", playAll).textContent = t("playall");
+      playAll.setAttribute("aria-label", g === "All" ? t("playall.all") : t("playall.g", { g: tr(g) }));
       requestAnimationFrame(() => lib.forEach((c) => cards.get(c.name).redraw()));
     }
 
@@ -1124,6 +1350,22 @@
     }
     select("All");
     requestAnimationFrame(() => blocks.forEach((c) => cards.get(c.name).redraw()));
+    onLang(() => {
+      for (const b of tabs) b.innerHTML = `${esc(b.dataset.g === "All" ? t("all") : tr(b.dataset.g))}<span>${b.dataset.n}</span>`;
+      for (const { card, cue } of cards.values()) {
+        const len = $(".cue-len", card);
+        if (len) len.textContent = lenText(cue);
+        const dl = $(".cue-dl", card);
+        if (dl) dl.setAttribute("aria-label", t("mp3.aria", { t: tr(cue.title) }));
+        const sb = $(".cue-spec-btn", card);
+        if (sb) sb.textContent = t(sb.getAttribute("aria-expanded") === "true" ? "hide" : "spec");
+        const cp = $(".cue-copy", card);
+        if (cp) cp.textContent = t("copy");
+      }
+      if (chain) $("span", playAll).textContent = t("stop");
+      else $("span", playAll).textContent = t("playall");
+      playAll.setAttribute("aria-label", current === "All" ? t("playall.all") : t("playall.g", { g: tr(current) }));
+    });
     window.addEventListener("resize", debounce(() => cards.forEach((c) => c.redraw()), 120));
   }
 
@@ -1324,7 +1566,7 @@
       c.id = `pg-tab-${i}`;
       c.setAttribute("role", "tab");
       c.setAttribute("aria-controls", "pg-card");
-      c.innerHTML = `<span class="pg-chip-name">${esc(p.title)}</span><span class="pg-chip-tag">${esc(p.tag || "")}</span>`;
+      c.innerHTML = `<span class="pg-chip-name" data-tr="${esc(p.title)}">${esc(tr(p.title))}</span><span class="pg-chip-tag" data-tr="${esc(p.tag || "")}">${esc(tr(p.tag || ""))}</span>`;
       c.addEventListener("click", () => {
         const same = states[i] === st;
         select(i);
@@ -1353,7 +1595,7 @@
       const used = new Set();
       if (sameShape) {
         for (const m of st.preset.marks || []) {
-          out.push({ label: m.label, events: m.events.slice() });
+          out.push({ label: tr(m.label), events: m.events.slice() });
           m.events.forEach((i) => used.add(i));
         }
       }
@@ -1366,7 +1608,7 @@
         byT.get(k).push(i);
       }
       for (const evs of byT.values()) {
-        const roles = evs.map((i) => words(spec.events[i].role));
+        const roles = evs.map((i) => tr(words(spec.events[i].role)));
         out.push({ label: roles.length > 2 ? `${roles[0]} +${roles.length - 1}` : roles.join(" + "), events: evs });
       }
       out.sort((a, b) => spec.events[a.events[0]].t - spec.events[b.events[0]].t);
@@ -1387,7 +1629,7 @@
         b.setAttribute("role", "slider");
         b.setAttribute("aria-valuemin", "0");
         b.setAttribute("aria-valuemax", String(st.spec.duration));
-        b.setAttribute("aria-label", `${m.label} time`);
+        b.setAttribute("aria-label", t("mark.aria", { l: m.label }));
         b.innerHTML = `<span class="pg-mark-label">${GRIP}${esc(m.label)}</span><span class="pg-mark-line" aria-hidden="true"></span>`;
         m.node = b;
         m.labelNode = b.firstChild;
@@ -1415,13 +1657,13 @@
       });
       lanes = Math.max(1, ends.length);
       for (const { m, x, lw, left, lane } of placed) {
-        const t = st.spec.events[m.events[0]].t;
+        const at = st.spec.events[m.events[0]].t;
         m.node.style.left = `${x}px`;
         m.node.style.top = `${lane * LANE}px`;
         m.node.style.setProperty("--shift", `${left - (x - lw / 2)}px`);
         m.node.classList.toggle("changed", markChanged(m));
-        m.node.setAttribute("aria-valuenow", t.toFixed(2));
-        m.node.setAttribute("aria-valuetext", `${m.label} at ${t.toFixed(2)} seconds`);
+        m.node.setAttribute("aria-valuenow", at.toFixed(2));
+        m.node.setAttribute("aria-valuetext", t("mark.at", { l: m.label, t: at.toFixed(2) }));
       }
       head.style.top = `${topPx()}px`;
     }
@@ -1520,7 +1762,7 @@
     /* -- controls ---------------------------------------------------- */
     function field(label, cls) {
       const f = el("div", `pg-field ${cls || ""}`);
-      if (label) f.appendChild(el("span", "pg-field-label", label));
+      if (label) f.appendChild(el("span", "pg-field-label", tr(label)));
       return f;
     }
     function range(f, { min, max, step, aria, onInput, fmt }) {
@@ -1553,9 +1795,9 @@
         const evs = c.events || [];
         if (evs.length && !sameShape) continue; // the Spec was rewritten; its indices no longer apply
         if (c.kind === "pan") {
-          const f = field(`${c.label} · pan`);
+          const f = field(`${tr(c.label)} · ${t("pan")}`);
           const r = range(f, {
-            min: -1, max: 1, step: 0.25, aria: `${c.label} pan`,
+            min: -1, max: 1, step: 0.25, aria: `${tr(c.label)} ${t("pan")}`,
             fmt: (v) => panLabel(v),
             onInput: (v) => evs.forEach((i) => { spec().events[i].pan = v; }),
           });
@@ -1567,7 +1809,7 @@
         } else if (c.kind === "gain") {
           const f = field(c.label);
           const r = range(f, {
-            min: c.min ?? -30, max: c.max ?? 0, step: 1, aria: `${c.label} gain`,
+            min: c.min ?? -30, max: c.max ?? 0, step: 1, aria: t("gain.aria", { l: tr(c.label) }),
             fmt: (v) => `${v > 0 ? "+" : ""}${Math.round(v)} dB`,
             onInput: (v) => {
               const d = v - spec().events[evs[0]].gain_db;
@@ -1577,10 +1819,10 @@
           syncers.push(() => r.show(spec().events[evs[0]].gain_db));
           controlsEl.appendChild(f);
         } else if (c.kind === "bed_db") {
-          const f = field(`${c.label} · level`);
+          const f = field(`${tr(c.label)} · ${t("level")}`);
           const fallback = base.bed_db ?? -40;
           const r = range(f, {
-            min: c.min ?? -60, max: c.max ?? -6, step: 1, aria: `${c.label} level`,
+            min: c.min ?? -60, max: c.max ?? -6, step: 1, aria: `${tr(c.label)} ${t("level")}`,
             fmt: (v) => `${Math.round(v)} dB`,
             onInput: (v) => { if (spec().texture !== "none") spec().bed_db = v; },
           });
@@ -1595,7 +1837,7 @@
           const f = field("", "pg-field-seed");
           const b = el("button", "pg-seed");
           b.type = "button";
-          b.innerHTML = `${DICE}<span>${esc(c.label)}</span>`;
+          b.innerHTML = `${DICE}<span>${esc(tr(c.label))}</span>`;
           b.addEventListener("click", () => {
             engine.init();
             newTake(evs);
@@ -1608,9 +1850,9 @@
           const f = field(c.label);
           const group = el("div", "pg-seg");
           group.setAttribute("role", "radiogroup");
-          group.setAttribute("aria-label", c.label);
+          group.setAttribute("aria-label", tr(c.label));
           const opts = c.options.map((o) => {
-            const b = el("button", "pg-seg-opt", words(o));
+            const b = el("button", "pg-seg-opt", tr(words(o)));
             b.type = "button";
             b.setAttribute("role", "radio");
             b.addEventListener("click", () => setTexture(o));
@@ -1745,14 +1987,14 @@
         s.renderedKey = key;
         s.failedKey = null;
         if (s === st) {
-          if (!jsonBox.hidden) { jsonMsg.textContent = "Rendered. Drag a marker, or edit again."; jsonMsg.classList.remove("err"); }
+          if (!jsonBox.hidden) { jsonMsg.textContent = t("json.done"); jsonMsg.classList.remove("err"); }
           if (keyOf(s) === key) playCurrent();
         }
       } catch (err) {
         console.warn(err);
         s.failedKey = key;
         if (s === st) {
-          const msg = `The engine refused this Spec: ${err.message}`;
+          const msg = t("json.refused", { m: err.message });
           if (!jsonBox.hidden) { jsonMsg.textContent = msg; jsonMsg.classList.add("err"); }
           else engine.status("ready", "render failed, try another value");
         }
@@ -1784,8 +2026,9 @@
         c.tabIndex = k === i ? 0 : -1;
       });
       card.setAttribute("aria-labelledby", chips[i].id);
-      blurb.textContent = st.preset.blurb || "";
-      viz.setAttribute("aria-label", `${st.preset.title}, ${st.spec.duration} seconds`);
+      st.mine = st.mine || false;
+      blurb.textContent = st.mine ? t("gen.blurb") : tr(st.preset.blurb || "");
+      viz.setAttribute("aria-label", t("viz.aria", { t: tr(st.preset.title), d: st.spec.duration }));
       rebuild();
       if (!jsonBox.hidden) fillJson();
     }
@@ -1798,7 +2041,7 @@
 
     function fillJson() {
       jsonText.value = prettySpec(st.spec);
-      jsonMsg.textContent = "Valid JSON in, a new render out.";
+      jsonMsg.textContent = t("json.ok");
       jsonMsg.classList.remove("err");
     }
 
@@ -1810,6 +2053,8 @@
       st.renderedKey = JSON.stringify(st.preset.spec);
       st.failedKey = null;
       st.dirty = false;
+      st.mine = false;
+      blurb.textContent = tr(st.preset.blurb || "");
       activeMark = -1;
       rebuild();
       if (!jsonBox.hidden) fillJson();
@@ -1820,7 +2065,7 @@
       jsonBox.hidden = !open;
       specEl.hidden = open;
       editToggle.setAttribute("aria-pressed", String(open));
-      editToggle.textContent = open ? "Done" : "Edit";
+      editToggle.textContent = t(open ? "done" : "edit");
       if (open) {
         fillJson();
         engine.init();
@@ -1833,7 +2078,7 @@
       try {
         obj = JSON.parse(jsonText.value);
       } catch (err) {
-        jsonMsg.textContent = `Not valid JSON: ${err.message}`;
+        jsonMsg.textContent = t("json.bad", { m: err.message });
         jsonMsg.classList.add("err");
         return;
       }
@@ -1848,7 +2093,7 @@
         e.pan = e.pan ?? 0;
         e.seed = e.seed ?? 0;
       }
-      jsonMsg.textContent = "Rendering…";
+      jsonMsg.textContent = t("gen.rendering");
       jsonMsg.classList.remove("err");
       if (player.token === "try") stop();
       st.spec = obj;
@@ -1868,6 +2113,13 @@
     select(0);
     // "Shape it by hand" under a generated sound: load its Spec into the
     // current preset slot as an edit (Reset brings the preset back).
+    onLang(() => {
+      blurb.textContent = st.mine ? t("gen.blurb") : tr(st.preset.blurb || "");
+      viz.setAttribute("aria-label", t("viz.aria", { t: tr(st.preset.title), d: st.spec.duration }));
+      editToggle.textContent = t(jsonBox.hidden ? "edit" : "done");
+      rebuild();
+    });
+
     loadIntoPlayground = (spec, current) => {
       if (player.token === "try") stop();
       st.spec = clone(spec);
@@ -1878,7 +2130,8 @@
       st.dirty = false;
       activeMark = -1;
       rebuild();
-      blurb.textContent = "Your generated sound. Drag a marker or a slider; Reset brings the preset back.";
+      st.mine = true;
+      blurb.textContent = t("gen.blurb");
       if (!jsonBox.hidden) fillJson();
       $("#shape").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
     };
@@ -1947,6 +2200,7 @@
   /* ------------------------------------------------------------------ */
 
   async function boot() {
+    initLang();
     engine.probe();
     initNav();
     observeReveal();
@@ -1964,6 +2218,7 @@
     initPlayground();
     initGallery();
     initEngineAutostart();
+    if (LANG !== "en") setLang(LANG, false);   // hooks registered by the inits above
     darkQuery.addEventListener && darkQuery.addEventListener("change", () => {
       THEME = null;
       window.dispatchEvent(new Event("resize"));
