@@ -219,6 +219,13 @@
     mode: "probe", probed: null, wantInit: false,
     probe() {
       if (this.probed) return this.probed;
+      if (/\.github\.io$/.test(location.hostname) || location.protocol === "file:") {
+        // Static hosting: there is no server engine to find.
+        this.mode = "browser";
+        this.probed = Promise.resolve(this.mode);
+        if (this.wantInit) this.init();
+        return this.probed;
+      }
       const ctl = typeof AbortController === "function" ? new AbortController() : null;
       const timer = setTimeout(() => ctl && ctl.abort(), 3000);
       this.probed = fetch("api/health", { cache: "no-store", signal: ctl ? ctl.signal : undefined })
@@ -230,7 +237,7 @@
           if (this.mode === "server") {
             this.ready = true;
             this.status("ready", "server engine ready");
-            document.querySelectorAll("[data-where]").forEach((n) => { n.textContent = "Both run on this server, about a second per sound."; });
+            document.querySelectorAll("[data-where]").forEach((n) => { n.textContent = "Both run on this server, so there is nothing to download first."; });
             document.querySelectorAll("[data-fine]").forEach((n) => { n.textContent = "Generation runs on this server. Every result downloads as a 48 kHz stereo WAV, and the same page runs fully in your browser at stdevmac.github.io/orb-audio."; });
             document.dispatchEvent(new CustomEvent("orb:engine-ready"));
           } else if (this.wantInit) {
