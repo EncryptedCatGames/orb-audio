@@ -1,5 +1,48 @@
 # Results — 2026-11-16
 
+## Realism pass: 30 natural and foley roles rebuilt (2026-11-17)
+
+Every natural, foley and everyday role that read wrong was rebuilt from the physics of the real sound (what vibrates, what excites it, how events are spread in time, what the space adds) and checked against real ESC-50 recordings. Thunder is now a near-bolt crack, rumble from the rest of the channel arriving over 1–2 s, and a diffuse tail where lows ring longer than highs (t60 1.8 s below 350 Hz, 1.1 s above), instead of a stylised whoosh. The seed variant contract (`VARIANTS`, `seed % N`) is unchanged, so the planner needs no retraining; every role still renders a 4 s event well under 0.5 s.
+
+Judges, seeds 0–5 per role. AST: mean probability of the role's AudioSet label(s). CLAP rank: rank of the correct role among the 37 role descriptions, zero-shot (1 is best). ESC similarity: CLAP cosine to the centroid of the matching ESC-50 class (real clips score 0.74–0.93 against their own centroid).
+
+| role | AST before → after | CLAP rank before → after | ESC similarity before → after (ceiling) | AST's usual label now |
+|---|---|---|---|---|
+| thunder | 0.019 → 0.105 | 4.8 → 2.0 | 0.45 → 0.62 | Explosion |
+| footsteps | 0.001 → 0.001 | 14.5 → 11.2 | 0.12 → 0.29 | Sound effect |
+| water_drop | 0.003 → 0.007 | 2.0 → 2.0 | 0.52 → 0.52 | Plop |
+| bird_chirp | 0.218 → 0.492 | 3.3 → 2.8 | 0.50 → 0.55 | Chirp, tweet |
+| crickets | 0.501 → 0.662 | 4.3 → 2.5 | 0.49 → 0.47 | Insect |
+| wave_crash | 0.008 → 0.013 | 1.5 → 1.7 | 0.51 → 0.52 | Sound effect |
+| wind_gust | 0.021 → 0.063 | 2.0 → 2.0 | 0.51 → 0.57 | Waves, surf |
+| splash | 0.001 → 0.002 | 1.7 → 1.5 | 0.47 → 0.51 | Slosh |
+| frog | 0.041 → 0.166 | 5.5 → 1.3 | 0.15 → 0.23 | Sound effect |
+| owl | 0.001 → 0.260 | 14.8 → 3.2 | – | Owl |
+| glass_break | 0.117 → 0.140 | 1.0 → 1.0 | 0.72 → 0.69 | Breaking |
+| clock_tick | 0.007 → 0.023 | 15.5 → 7.2 | 0.13 → 0.29 | Wood block |
+| phone_ring | 0.562 → 0.647 | 5.7 → 3.8 | – | Telephone bell ringing |
+| keyboard_typing | 0.022 → 0.017 | 13.3 → 7.5 | 0.10 → 0.22 | Sound effect |
+| mouse_click | 0.001 → 0.001 | 8.8 → 4.3 | 0.27 → 0.43 | Finger snapping |
+| camera_shutter | 0.002 → 0.068 | 22.0 → 15.8 | – | Sound effect |
+| paper_rustle | 0.048 → 0.038 | 6.5 → 4.0 | – | Sound effect |
+| cork_pop | 0.061 → 0.082 | 1.0 → 1.0 | – | Knock |
+| coin_drop | 0.004 → 0.040 | 2.0 → 2.0 | – | Chink, clink |
+| heartbeat | 0.057 → 0.649 | 1.0 → 1.0 | – | Heart sounds, heartbeat |
+| applause | 0.004 → 0.279 | 8.3 → 7.2 | 0.19 → 0.34 | Firecracker |
+| pouring_water | 0.054 → 0.079 | 2.5 → 2.7 | 0.29 → 0.31 | Plop |
+| can_opening | 0.000 → 0.000 | 2.0 → 4.2 | 0.44 → 0.41 | Sound effect |
+| clock_alarm | 0.143 → 0.166 | 1.2 → 1.0 | 0.44 → 0.56 | Telephone bell ringing |
+| punch | 0.040 → 0.119 | 1.3 → 1.0 | – | Whoosh, swoosh, swish |
+| gunshot | 0.007 → 0.027 | 3.2 → 1.5 | – | Explosion |
+| siren | 0.388 → 0.732 | 1.5 → 1.2 | 0.65 → 0.69 | Siren |
+| engine | 0.009 → 0.038 | 13.0 → 6.5 | 0.15 → 0.19 | Sound effect |
+| church_bell | 0.019 → 0.377 | 5.3 → 1.5 | 0.15 → 0.32 | Church bell |
+| fireworks | 0.139 → 0.339 | 6.5 → 2.7 | 0.41 → 0.64 | Fireworks |
+
+Unchanged (not reworked): door_slam, knock, explosion, metal_clang, wood_creak, sword_clash, car_horn
+
+Still weak: wind (AST hears waves), engine, clock tick (heard as a wood block), can opening (CLAP rank worse, 2.0 → 4.2), and the frog's bullfrog and peeper variants. Tests: 406 passed, 1 skipped (`test_natural`, `test_foley`, `test_render_baseline`).
+
 ## Planner v8: plain-text prompts (2026-11-17)
 
 Planner v8 (`configs/planner_v8.json`) reads plain words as well as the caption grammar. Same architecture as v5–v7 (d256, 6 layers, 4 heads, ctx 1024). The vocabulary grows by one token, 394 → 395: `NOBED` means "no bed" (texture `none`), so a prompt like "a notification ding" can plan a dry cue. The planner now has 5,096,192 params, +256 over v7, and the total for both models is 14,160,579.

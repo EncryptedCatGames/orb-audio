@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Realism pass on the natural, foley and everyday sounds: 30 roles rebuilt from the physics of the real sound and checked against ESC-50 recordings and two audio judges (RESULTS.md). Thunder is a crack, then rumble arriving from the rest of the bolt and a long low tail, instead of a whoosh. Big gains for church bell, heartbeat, siren, owl, birds, applause, fireworks, gunshot and the desk sounds. Variant contract unchanged, no planner retrain. The site's pre-rendered library is re-rendered with the new sounds.
+
 ## [0.1.0] — 2026-11-16
 
 First public release.
