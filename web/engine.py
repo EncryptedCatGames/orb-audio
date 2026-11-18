@@ -58,6 +58,50 @@ def _orb_web():
     return _ORB_WEB
 
 
+# Bounds for /api/render, which takes a hand-edited Spec from the open web.
+# Generous next to the grammar (8 events, ~10 s) so playground edits fit,
+# tight enough that one request cannot hold the render lock for long.
+MAX_RENDER_SECONDS = 30.0
+MAX_RENDER_EVENTS = 32
+
+
+def _check_spec(spec: object) -> None:
+    """Reject Specs outside the renderer's sane range before rendering."""
+    import math
+
+    from orb.grammar import BED_CHOICES, EVENT_ROLES
+
+    def num(value: object, name: str, lo: float, hi: float) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise BadInput(f"invalid spec: {name} must be a number")
+        v = float(value)
+        if not math.isfinite(v) or not lo <= v <= hi:
+            raise BadInput(f"invalid spec: {name} must be within [{lo:g}, {hi:g}]")
+        return v
+
+    if not isinstance(spec, dict):
+        raise BadInput("invalid spec: expected an object")
+    duration = num(spec.get("duration"), "duration", 0.1, MAX_RENDER_SECONDS)
+    texture = spec.get("texture", "none")
+    if texture not in BED_CHOICES:
+        raise BadInput(f"invalid spec: unknown texture {texture!r}")
+    if "bed_db" in spec:
+        num(spec["bed_db"], "bed_db", -80.0, 0.0)
+    events = spec.get("events", [])
+    if not isinstance(events, list) or len(events) > MAX_RENDER_EVENTS:
+        raise BadInput(f"invalid spec: events must be a list of at most {MAX_RENDER_EVENTS}")
+    for i, ev in enumerate(events):
+        if not isinstance(ev, dict):
+            raise BadInput(f"invalid spec: events[{i}] must be an object")
+        if ev.get("role") not in EVENT_ROLES:
+            raise BadInput(f"invalid spec: events[{i}] has unknown role {ev.get('role')!r}")
+        num(ev.get("t"), f"events[{i}].t", 0.0, duration)
+        num(ev.get("dur"), f"events[{i}].dur", 0.01, MAX_RENDER_SECONDS)
+        num(ev.get("gain_db", 0.0), f"events[{i}].gain_db", -80.0, 12.0)
+        num(ev.get("pan", 0.0), f"events[{i}].pan", -1.0, 1.0)
+        num(ev.get("seed", 0), f"events[{i}].seed", 0, 2**32 - 1)
+
+
 def resolve_model_path(path: str) -> Path:
     """Accept either the .pt checkpoint or a .safetensors sibling."""
     candidate = ROOT / path
@@ -216,6 +260,7 @@ class Engine:
         """Spec dict -> the exact output of the in-browser renderer
         (``site/py/orb_web.render``): same loudness cap, peaks and audit."""
         orb_web = _orb_web()
+        _check_spec(spec)
         try:
             with self._lock:
                 return orb_web.render(spec, seed=int(seed) & 0xFFFFFFFF)
