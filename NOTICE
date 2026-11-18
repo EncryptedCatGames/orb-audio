@@ -51,3 +51,7 @@ References
 See the References section of README.md for the papers this implementation
 draws on (U-Net, FiLM, GroupNorm, multi-resolution STFT loss, hinge GAN,
 Transformer, AdamW).
+
+Modifications in the EncryptedCatGames fork (2026): UFO sound roles in
+src/orb/render/ufo.py, wired into src/orb/score.py and src/orb/render/events.py;
+scripts/render_ufo.py; tests/test_ufo.py.

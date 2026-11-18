@@ -63,6 +63,11 @@ EVENT_ROLES = (
     "church_bell",
     "fireworks",
 )
+# Destruction Cars fork: game-specific roles, rendered by `render/ufo.py`.
+# Kept out of EVENT_ROLES so the planner's token layout and the seeds of every
+# existing role are unchanged; usable from hand-written Scores only.
+GAME_ROLES = ("ufo_hover", "tractor_beam", "ufo_laser", "ufo_charge", "abduction")
+ALL_ROLES = EVENT_ROLES + GAME_ROLES
 INSTRUMENTS = ("pad", "pluck", "bass", "bell", "perc", "strings")
 TEXTURES = (
     "room_cold",
@@ -166,7 +171,7 @@ class Event:
     seed: int = 0
 
     def __post_init__(self) -> None:
-        _check(self.role in EVENT_ROLES, f"unknown event role {self.role!r}")
+        _check(self.role in ALL_ROLES, f"unknown event role {self.role!r}")
         _check(self.t >= 0, "event t must be >= 0")
         _check(self.dur > 0, "event dur must be > 0")
         if self.apex is None:

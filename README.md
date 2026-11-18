@@ -1,3 +1,10 @@
+> **Destruction Cars fork.** This fork adds game-specific UFO roles
+> (`ufo_hover`, `tractor_beam`, `ufo_laser`, `ufo_charge`, `abduction`) in
+> `src/orb/render/ufo.py`. They live in `GAME_ROLES`, outside the planner's
+> `EVENT_ROLES`, so the planner, its weights and every existing render are
+> unchanged; use them from a hand-written Score. Render the set with
+> `.venv/bin/python scripts/render_ufo.py out/ufo`.
+
 <div align="center">
 
 # ORB

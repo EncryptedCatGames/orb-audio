@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..score import EVENT_ROLES, Event
+from ..score import ALL_ROLES, Event
 from .dsp import (
     align_peak,
     bandlimit,
@@ -28,6 +28,9 @@ from .foley import FOLEY_PARAMS, render_foley
 from .foley import ROLES as _FOLEY_ROLES
 from .natural import PARAMS as NATURAL_PARAMS
 from .natural import ROLES as NATURAL_ROLES
+from .ufo import PARAMS as UFO_PARAMS
+from .ufo import RENDERERS as UFO_RENDERERS
+from .ufo import SMOOTH_ROLES as UFO_SMOOTH_ROLES
 
 # Every role with its own stereo physical model (rendered by `render_foley`).
 FOLEY_ROLES = _FOLEY_ROLES + NATURAL_ROLES
@@ -55,6 +58,8 @@ ROLE_PARAMS: dict[str, dict[str, float]] = {
     **FOLEY_PARAMS,
     # everyday, nature and action roles (v0.3): rendered by `natural.py`
     **NATURAL_PARAMS,
+    # Destruction Cars fork: UFO roles, rendered by `ufo.py`
+    **UFO_PARAMS,
 }
 
 
@@ -187,7 +192,7 @@ def _edges(mono: np.ndarray, sr: int, role: str) -> np.ndarray:
     A noise_sweep ends at ~13% of its peak, and a 10 ms linear ramp from
     there was a small high-frequency tick at the dry end.
     """
-    if role not in CONTINUOUS_ROLES:
+    if role not in CONTINUOUS_ROLES + UFO_SMOOTH_ROLES:
         return fade(mono, sr, 0.002, 0.01)
     x = mono.copy()
     n = len(x)
@@ -219,6 +224,7 @@ _RENDERERS = {
     "sub_drop": _sub_drop,
     "glitch": _glitch,
     "noise_sweep": _noise_sweep,
+    **UFO_RENDERERS,
 }
 
 
@@ -229,7 +235,7 @@ def render_event(ev: Event, sr: int, seed: int = 0, tail: bool = False) -> np.nd
     with it. With `tail=True` the reverb rings out past `ev.dur` (the mixer
     uses this), so an event never ends on a cut-off tail.
     """
-    idx = EVENT_ROLES.index(ev.role)
+    idx = ALL_ROLES.index(ev.role)
     rng = np.random.default_rng((seed * 1_000_003 + idx * 7_919 + int(ev.t * 1000)) & 0xFFFFFFFF)
     p = {**ROLE_PARAMS[ev.role], **ev.params}
     if ev.role in FOLEY_ROLES:
@@ -246,8 +252,12 @@ def render_event(ev: Event, sr: int, seed: int = 0, tail: bool = False) -> np.nd
     mono = mono - mono.mean()
     if ev.role in CONTINUOUS_ROLES:
         mono = align_peak(mono, sr, ev.apex - ev.t)
-    mono = _edges(mono, sr, ev.role)
-    wet = float(p.get("reverb", 0.0))
+    # A seamless loop (ufo_hover with loop=1) keeps its ends: fades and reverb
+    # would both break the seam.
+    looping = float(p.get("loop", 0.0)) >= 0.5
+    if not looping:
+        mono = _edges(mono, sr, ev.role)
+    wet = 0.0 if looping else float(p.get("reverb", 0.0))
     if wet > 0:
         mono = _wet(mono, sr, p, wet, int(rng.integers(1 << 31)), tail)
 
@@ -256,7 +266,8 @@ def render_event(ev: Event, sr: int, seed: int = 0, tail: bool = False) -> np.nd
         rng2 = np.random.default_rng(int(rng.integers(1 << 31)))
         mono2 = fn(ev, sr, rng2, p)
         mono2 = mono2 - mono2.mean()
-        mono2 = _edges(mono2, sr, ev.role)
+        if not looping:
+            mono2 = _edges(mono2, sr, ev.role)
         if wet > 0:
             mono2 = _wet(mono2, sr, p, wet, int(rng2.integers(1 << 31)), tail)
         mid = 0.5 * (mono + mono2)
